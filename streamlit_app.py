@@ -14,9 +14,12 @@ from io import BytesIO
 from PIL import Image
 import torch
 
-# Load environment variables
-from dotenv import load_dotenv
-load_dotenv()
+# Skip dotenv on HF Spaces
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except:
+    pass
 
 # Configure Streamlit
 st.set_page_config(
@@ -50,35 +53,26 @@ st.divider()
 device = "cuda" if torch.cuda.is_available() else "cpu"
 st.info(f"🚀 Running on: **{device.upper()}**", icon="ℹ️")
 
-# Import the SDXL generation function
+# Import SDXL dependencies
 try:
     from diffusers import AutoPipelineForText2Image
-    import torch
-    
-    @st.cache_resource
-    def load_pipeline():
-        """Load SDXL pipeline (cached)"""
-        st.spinner("Loading Stable Diffusion XL model...")
-        
-        model_id = "stabilityai/stable-diffusion-xl-base-1.0"
-        
-        pipeline = AutoPipelineForText2Image.from_pretrained(
-            model_id,
-            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-            use_safetensors=True,
-            variant="fp16" if device == "cuda" else None
-        )
-        pipeline = pipeline.to(device)
-        
-        return pipeline
-    
-    # Load model
-    with st.spinner("Initializing model..."):
-        pipeline = load_pipeline()
-    
 except ImportError:
-    st.error("❌ Required libraries not installed. Please install: `pip install diffusers transformers torch accelerate safetensors`")
+    st.error("❌ Required libraries not installed.")
     sys.exit(1)
+
+@st.cache_resource
+def load_pipeline():
+    """Load SDXL pipeline (lazy loaded, cached)"""
+    model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+    
+    pipeline = AutoPipelineForText2Image.from_pretrained(
+        model_id,
+        torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+        use_safetensors=True,
+        variant="fp16" if device == "cuda" else None
+    )
+    pipeline = pipeline.to(device)
+    return pipeline
 
 # Main input area
 st.subheader("📝 Describe Your Image")
@@ -106,8 +100,12 @@ if st.button("✨ Generate Image", type="primary", use_container_width=True):
     if not prompt.strip():
         st.warning("Please enter a prompt to generate an image.")
     else:
-        with st.spinner("🎨 Generating your image... (this may take a minute)"):
-            try:
+        try:
+            # Load model on first use (cached after)
+            with st.spinner("🎨 Loading SDXL model (first time only)..."):
+                pipeline = load_pipeline()
+            
+            with st.spinner("✨ Generating your image... (this may take a minute)"):
                 # Generate image
                 image = pipeline(
                     prompt=prompt,
@@ -139,8 +137,8 @@ if st.button("✨ Generate Image", type="primary", use_container_width=True):
                 with st.expander("📋 View Prompt"):
                     st.text(prompt)
                     
-            except Exception as e:
-                st.error(f"❌ Error generating image: {str(e)}")
+        except Exception as e:
+            st.error(f"❌ Error: {str(e)}")
 
 # Footer
 st.divider()

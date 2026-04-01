@@ -12,7 +12,6 @@ from datetime import datetime
 import base64
 from io import BytesIO
 from PIL import Image
-import torch
 
 # Load environment variables
 from dotenv import load_dotenv

@@ -1,0 +1,2876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nafti AI - Image Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            color: #333;
+            font-weight: 500;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        textarea, input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .slider-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .slider-item {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .slider-item label {
+            margin-bottom: 8px;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+        
+        .slider-value {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.2s;
+            margin-top: 10px;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .output {
+            margin-top: 30px;
+            text-align: center;
+            display: none;
+        }
+        
+        .output.active {
+            display: block;
+        }
+        
+        .output img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .loader {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loader.active {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 10px;
+            display: none;
+            font-size: 14px;
+        }
+        
+        .error.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Nafti AI</h1>
+        <p class="subtitle">Free SDXL Image Generation - Powered by Hugging Face Spaces</p>
+        
+        <div class="form-group">
+            <label for="prompt">Describe what you want to generate:</label>
+            <textarea id="prompt" placeholder="A beautiful sunset over mountains, oil painting style..."></textarea>
+        </div>
+        
+        <div class="slider-group">
+            <div class="slider-item">
+                <label for="width">Width: <span id="widthValue">512</span></label>
+                <input type="range" id="width" min="256" max="1024" step="64" value="512">
+            </div>
+            <div class="slider-item">
+                <label for="height">Height: <span id="heightValue">512</span></label>
+                <input type="range" id="height" min="256" max="1024" step="64" value="512">
+            </div>
+        </div>
+        
+        <div class="slider-group" style="margin-top: 15px;">
+            <div class="slider-item">
+                <label for="steps">Steps: <span id="stepsValue">25</span></label>
+                <input type="range" id="steps" min="15" max="50" step="1" value="25">
+            </div>
+            <div class="slider-item">
+                <label for="guidance">Guidance: <span id="guidanceValue">7.5</span></label>
+                <input type="range" id="guidance" min="1" max="20" step="0.5" value="7.5">
+            </div>
+        </div>
+        
+        <button id="generateBtn" onclick="generate()">Generate Image</button>
+        
+        <div class="error" id="error"></div>
+        
+        <div class="loader" id="loader">
+            <div class="spinner"></div>
+            <p>Generating image, this may take 2-3 minutes...</p>
+        </div>
+        
+        <div class="output" id="output">
+            <img id="resultImage" src="" alt="Generated image">
+        </div>
+    </div>
+    
+    <script>
+        // Update slider display values
+        document.getElementById('width').addEventListener('input', (e) => {
+            document.getElementById('widthValue').textContent = e.target.value;
+        });
+        document.getElementById('height').addEventListener('input', (e) => {
+            document.getElementById('heightValue').textContent = e.target.value;
+        });
+        document.getElementById('steps').addEventListener('input', (e) => {
+            document.getElementById('stepsValue').textContent = e.target.value;
+        });
+        document.getElementById('guidance').addEventListener('input', (e) => {
+            document.getElementById('guidanceValue').textContent = e.target.value;
+        });
+        
+        async function generate() {
+            const prompt = document.getElementById('prompt').value;
+            const width = document.getElementById('width').value;
+            const height = document.getElementById('height').value;
+            const steps = document.getElementById('steps').value;
+            const guidance = document.getElementById('guidance').value;
+            const errorDiv = document.getElementById('error');
+            const loader = document.getElementById('loader');
+            const output = document.getElementById('output');
+            const btn = document.getElementById('generateBtn');
+            
+            if (!prompt.trim()) {
+                errorDiv.textContent = 'Please enter a prompt';
+                errorDiv.classList.add('active');
+                return;
+            }
+            
+            errorDiv.classList.remove('active');
+            loader.classList.add('active');
+            output.classList.remove('active');
+            btn.disabled = true;
+            
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt,
+                        width,
+                        height,
+                        steps,
+                        guidance
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Generation failed');
+                }
+                
+                document.getElementById('resultImage').src = data.image;
+                output.classList.add('active');
+                loader.classList.remove('active');
+            } catch (error) {
+                errorDiv.textContent = 'Error: ' + error.message;
+                errorDiv.classList.add('active');
+                loader.classList.remove('active');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        
+        // Allow Enter key in textarea
+        document.getElementById('prompt').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                generate();
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+
+<!-- PWA Meta Tags -->
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#0D7377">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Nafti AI">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+:root {
+--bg-primary: #F5F5F7;
+--bg-secondary: rgba(255,255,255,0.72);
+--bg-chat: #FFFFFF;
+--text-primary: #1D1D1F;
+--text-secondary: #6E6E73;
+--text-muted: #AEAEB2;
+--accent: #0A8F94;
+--accent-light: #0FC2C8;
+--accent-glow: rgba(10,143,148,0.12);
+--gold: #C79B3B;
+--gold-light: #E8C56D;
+--user-bubble: linear-gradient(135deg, #0A8F94, #0FC2C8);
+--user-text: #FFFFFF;
+--ai-bubble: #FFFFFF;
+--ai-text: #1D1D1F;
+--border: rgba(0,0,0,0.06);
+--shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+--shadow: 0 4px 24px rgba(0,0,0,0.06);
+--shadow-lg: 0 12px 48px rgba(0,0,0,0.1);
+--input-bg: #FFFFFF;
+--input-border: rgba(0,0,0,0.08);
+--scrollbar-track: transparent;
+--scrollbar-thumb: rgba(0,0,0,0.12);
+--code-bg: #1E1E2E;
+--code-text: #CDD6F4;
+--error-bg: #FEF2F2;
+--error-text: #DC2626;
+--glass: rgba(255,255,255,0.72);
+--glass-border: rgba(255,255,255,0.3);
+--radius-sm: 12px;
+--radius-md: 16px;
+--radius-lg: 24px;
+--radius-xl: 28px;
+}
+
+html.dark {
+--bg-primary: #0C0C0E;
+--bg-secondary: rgba(28,28,32,0.8);
+--bg-chat: #18181B;
+--text-primary: #F4F4F5;
+--text-secondary: #A1A1AA;
+--text-muted: #52525B;
+--accent: #22D3EE;
+--accent-light: #67E8F9;
+--accent-glow: rgba(34,211,238,0.1);
+--gold: #F59E0B;
+--gold-light: #FCD34D;
+--user-bubble: linear-gradient(135deg, #0891B2, #22D3EE);
+--user-text: #0C0C0E;
+--ai-bubble: #1E1E23;
+--ai-text: #E4E4E7;
+--border: rgba(255,255,255,0.06);
+--shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+--shadow: 0 4px 24px rgba(0,0,0,0.25);
+--shadow-lg: 0 12px 48px rgba(0,0,0,0.4);
+--input-bg: #1E1E23;
+--input-border: rgba(255,255,255,0.06);
+--scrollbar-track: transparent;
+--scrollbar-thumb: rgba(255,255,255,0.1);
+--code-bg: #09090B;
+--code-text: #A5F3FC;
+--error-bg: rgba(220,38,38,0.1);
+--error-text: #F87171;
+--glass: rgba(28,28,32,0.8);
+--glass-border: rgba(255,255,255,0.05);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+
+body {
+font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+background: var(--bg-primary);
+color: var(--text-primary);
+display: flex;
+flex-direction: column;
+height: 100dvh;
+position: relative;
+-webkit-font-smoothing: antialiased;
+}
+
+body::before {
+content: '';
+position: fixed;
+inset: 0;
+background:
+radial-gradient(ellipse 60% 50% at 10% 20%, var(--accent-glow) 0%, transparent 70%),
+radial-gradient(ellipse 50% 40% at 90% 80%, rgba(199,155,59,0.06) 0%, transparent 70%);
+pointer-events: none;
+z-index: 0;
+}
+
+/* ── Header ── */
+.header {
+position: relative;
+z-index: 10;
+padding: 12px 16px;
+display: flex;
+align-items: center;
+gap: 12px;
+border-bottom: 1px solid var(--border);
+background: var(--glass);
+backdrop-filter: blur(40px) saturate(180%);
+-webkit-backdrop-filter: blur(40px) saturate(180%);
+}
+
+.logo-container {
+width: 42px;
+height: 42px;
+border-radius: var(--radius-sm);
+background: linear-gradient(135deg, var(--accent), var(--gold));
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+box-shadow: 0 4px 14px rgba(10,143,148,0.3);
+}
+
+.logo-container i { font-size: 18px; color: #FFF; }
+
+.header-info { flex: 1; min-width: 0; }
+.header-info h1 {
+font-size: 19px;
+font-weight: 800;
+letter-spacing: -0.4px;
+background: linear-gradient(135deg, var(--accent), var(--gold));
+-webkit-background-clip: text;
+-webkit-text-fill-color: transparent;
+background-clip: text;
+line-height: 1.2;
+}
+
+.header-info p {
+font-size: 11px;
+color: var(--text-muted);
+font-weight: 500;
+margin-top: 1px;
+}
+
+.status-dot {
+width: 6px; height: 6px;
+background: #34D399;
+border-radius: 50%;
+display: inline-block;
+margin-right: 4px;
+animation: blink 2s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+.header-actions {
+display: flex;
+gap: 6px;
+align-items: center;
+}
+
+.header-btn {
+width: 38px; height: 38px;
+border-radius: var(--radius-sm);
+border: 1.5px solid var(--border);
+background: var(--bg-chat);
+color: var(--text-secondary);
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+font-size: 15px;
+transition: all .2s ease;
+flex-shrink: 0;
+}
+
+.header-btn:hover {
+border-color: var(--accent);
+color: var(--accent);
+background: var(--accent-glow);
+}
+
+.header-btn:active { transform: scale(.92); }
+
+.header-btn.accent-btn {
+border-color: var(--accent);
+color: var(--accent);
+background: var(--accent-glow);
+}
+
+.header-btn.hidden { display: none; }
+
+/* ── Chat Area ── */
+.chat-area {
+flex: 1;
+overflow-y: auto;
+padding: 20px 16px;
+position: relative;
+z-index: 1;
+scroll-behavior: smooth;
+}
+.chat-area::-webkit-scrollbar { width: 4px; }
+.chat-area::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+.chat-area::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 10px; }
+
+/* ── Welcome ── */
+.welcome {
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+height: 100%;
+text-align: center;
+padding: 20px;
+animation: fadeUp .7s cubic-bezier(.22,1,.36,1);
+}
+
+/* ── Authentication ── */
+.auth-page {
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+height: 100%;
+padding: 20px;
+}
+.auth-form {
+margin-bottom: 16px;
+max-width: 320px;
+width: 100%;
+}
+.auth-form input {
+width: 100%;
+padding: 10px;
+margin-bottom: 8px;
+border: 1px solid var(--border);
+border-radius: var(--radius-md);
+}
+.auth-form button {
+width: 100%;
+padding: 10px;
+background: var(--accent);
+color:#fff;
+border:none;
+border-radius: var(--radius-md);
+cursor:pointer;
+}
+.google-btn {
+display:inline-flex;
+align-items:center;
+margin-top:16px;
+padding:11px 20px;
+background:#4285F4;
+color:#fff;
+border-radius:var(--radius-md);
+text-decoration:none;
+font-family:'Inter',sans-serif;
+font-weight:600;
+font-size:14px;
+transition: all .2s ease;
+box-shadow: 0 2px 8px rgba(66,133,244,0.25);
+}
+.google-btn:hover { background:#3367D6; transform:translateY(-1px); }
+
+.auth-switch {
+margin-top:12px;
+font-size:13px;
+color:var(--text-secondary);
+}
+.auth-switch a {
+color:var(--accent);
+text-decoration:none;
+font-weight:600;
+}
+.auth-switch a:hover { text-decoration:underline; }
+
+@keyframes fadeUp {
+from { opacity: 0; transform: translateY(24px); }
+to { opacity: 1; transform: translateY(0); }
+}
+
+.welcome-icon {
+width: 80px; height: 80px;
+border-radius: 26px;
+background: linear-gradient(135deg, var(--accent), var(--gold));
+display: flex;
+align-items: center;
+justify-content: center;
+margin-bottom: 20px;
+box-shadow: 0 12px 36px rgba(10,143,148,0.25);
+animation: float 5s ease-in-out infinite;
+}
+
+@keyframes float {
+0%,100% { transform: translateY(0) rotate(0deg); }
+50% { transform: translateY(-6px) rotate(1deg); }
+}
+
+.welcome-icon i { font-size: 34px; color: #FFF; }
+
+.welcome h2 {
+font-size: 24px; font-weight: 800;
+letter-spacing: -0.5px;
+margin-bottom: 6px;
+}
+
+.welcome p {
+color: var(--text-secondary);
+font-size: 14px;
+max-width: 380px;
+line-height: 1.55;
+margin-bottom: 24px;
+}
+
+.welcome-subtitle {
+color: var(--accent);
+font-size: 13px;
+font-weight: 600;
+letter-spacing: 0.5px;
+text-transform: uppercase;
+margin-bottom: 12px;
+}
+
+.welcome-features {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 14px;
+max-width: 340px;
+width: 100%;
+margin-bottom: 28px;
+}
+
+.feature-item {
+display: flex;
+align-items: center;
+gap: 10px;
+padding: 12px 14px;
+background: var(--accent-glow);
+border-radius: var(--radius-md);
+font-size: 12px;
+font-weight: 600;
+color: var(--text-primary);
+}
+
+.feature-icon {
+font-size: 18px;
+flex-shrink: 0;
+}
+
+.feature-text {
+line-height: 1.4;
+}
+
+.welcome-cta {
+margin-bottom: 20px;
+}
+
+.welcome-cta h3 {
+font-size: 13px;
+font-weight: 700;
+color: var(--text-muted);
+letter-spacing: 0.3px;
+text-transform: uppercase;
+}
+
+.suggestions {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 8px;
+max-width: 360px;
+width: 100%;
+}
+
+.suggestion-chip {
+background: var(--bg-chat);
+border: 1.5px solid var(--border);
+border-radius: var(--radius-md);
+padding: 12px 14px;
+font-size: 13px;
+color: var(--text-secondary);
+cursor: pointer;
+transition: all .25s ease;
+font-family: 'Inter', sans-serif;
+font-weight: 600;
+text-align: left;
+display: flex;
+align-items: center;
+gap: 8px;
+animation: chipIn .5s cubic-bezier(.22,1,.36,1) backwards;
+box-shadow: var(--shadow-sm);
+}
+
+.suggestion-chip:nth-child(1) { animation-delay:.15s }
+.suggestion-chip:nth-child(2) { animation-delay:.25s }
+.suggestion-chip:nth-child(3) { animation-delay:.35s }
+.suggestion-chip:nth-child(4) { animation-delay:.45s }
+
+@keyframes chipIn {
+from { opacity:0; transform: translateY(8px) scale(.96); }
+to { opacity:1; transform: translateY(0) scale(1); }
+}
+
+.suggestion-chip:hover {
+border-color: var(--accent);
+color: var(--accent);
+transform: translateY(-2px);
+box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.suggestion-chip:active { transform: scale(.97); }
+
+.chip-icon {
+width: 30px; height: 30px;
+border-radius: 10px;
+background: var(--accent-glow);
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+font-size: 13px;
+color: var(--accent);
+}
+
+/* ── Messages ── */
+.message-group {
+display: flex;
+flex-direction: column;
+margin-bottom: 16px;
+animation: msgIn .35s cubic-bezier(.22,1,.36,1);
+}
+@keyframes msgIn {
+from { opacity:0; transform: translateY(10px); }
+to { opacity:1; transform: translateY(0); }
+}
+
+.message-group.user { align-items: flex-end; }
+.message-group.ai { align-items: flex-start; }
+
+.message-label {
+font-size: 11px;
+font-weight: 700;
+color: var(--text-muted);
+margin-bottom: 4px;
+padding: 0 2px;
+text-transform: uppercase;
+letter-spacing: .8px;
+}
+
+.message-bubble {
+max-width: 85%;
+padding: 14px 18px;
+border-radius: var(--radius-lg);
+line-height: 1.6;
+font-size: 15px;
+position: relative;
+word-wrap: break-word;
+overflow-wrap: break-word;
+}
+
+.message-group.user .message-bubble {
+background: var(--user-bubble);
+color: var(--user-text);
+border-bottom-right-radius: 8px;
+font-weight: 500;
+box-shadow: 0 4px 16px rgba(10,143,148,0.2);
+}
+
+.message-group.ai .message-bubble {
+background: var(--ai-bubble);
+color: var(--ai-text);
+border-bottom-left-radius: 8px;
+box-shadow: var(--shadow);
+border: 1px solid var(--border);
+}
+
+.message-group.ai .message-bubble.error-bubble {
+background: var(--error-bg);
+color: var(--error-text);
+border: 1px solid var(--error-text);
+}
+
+.message-bubble .retry-btn {
+display: inline-block;
+margin-top: 12px;
+padding: 8px 16px;
+background: var(--accent);
+color: white;
+border: none;
+border-radius: var(--radius-sm);
+font-size: 13px;
+font-weight: 600;
+cursor: pointer;
+transition: all 0.2s ease;
+}
+
+.message-bubble .retry-btn:hover {
+background: var(--accent-light);
+transform: translateY(-1px);
+}
+
+.message-bubble .retry-btn:active {
+transform: translateY(0);
+}
+
+/* Markdown */
+.message-bubble p { margin-bottom: 10px; }
+.message-bubble p:last-child { margin-bottom: 0; }
+.message-bubble strong { font-weight: 700; }
+.message-bubble em { font-style: italic; }
+
+.message-bubble h1,.message-bubble h2,.message-bubble h3,
+.message-bubble h4,.message-bubble h5,.message-bubble h6 {
+margin: 14px 0 6px; font-weight: 700; line-height: 1.3;
+}
+.message-bubble h1 { font-size: 1.25em; }
+.message-bubble h2 { font-size: 1.15em; }
+.message-bubble h3 { font-size: 1.08em; }
+
+.message-bubble ul,.message-bubble ol { margin: 8px 0; padding-left: 22px; }
+.message-bubble li { margin-bottom: 4px; }
+
+.message-bubble code {
+font-family: 'JetBrains Mono', monospace;
+font-size: .85em;
+background: var(--code-bg);
+color: var(--code-text);
+padding: 2px 7px;
+border-radius: 6px;
+}
+
+.message-bubble pre {
+background: var(--code-bg);
+border-radius: var(--radius-sm);
+padding: 14px 16px;
+margin: 10px 0;
+overflow-x: auto;
+}
+
+.message-bubble pre code {
+background: none;
+padding: 0;
+font-size: 13px;
+line-height: 1.55;
+}
+
+.message-bubble blockquote {
+border-left: 3px solid var(--gold);
+padding-left: 14px;
+margin: 10px 0;
+color: var(--text-secondary);
+font-style: italic;
+}
+
+.message-bubble a {
+color: var(--accent);
+text-decoration: underline;
+text-underline-offset: 2px;
+}
+
+.message-bubble table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; }
+.message-bubble th,.message-bubble td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+.message-bubble th { background: var(--accent-glow); font-weight: 700; }
+
+/* Typing */
+.typing-indicator { display: flex; gap: 5px; padding: 6px 0; }
+.typing-indicator span {
+width: 7px; height: 7px;
+background: var(--accent);
+border-radius: 50%;
+animation: typingBounce 1.2s ease-in-out infinite;
+}
+.typing-indicator span:nth-child(2) { animation-delay:.15s }
+.typing-indicator span:nth-child(3) { animation-delay:.3s }
+
+@keyframes typingBounce {
+0%,60%,100% { transform: translateY(0); opacity:.35 }
+30% { transform: translateY(-7px); opacity:1 }
+}
+
+/* ── Input ── */
+.input-area {
+position: relative;
+z-index: 10;
+padding: 10px 16px 14px;
+border-top: 1px solid var(--border);
+background: var(--glass);
+backdrop-filter: blur(40px) saturate(180%);
+-webkit-backdrop-filter: blur(40px) saturate(180%);
+}
+
+/* Attachment preview bar (multi) */
+.attachment-preview {
+display: none;
+padding: 8px 12px;
+margin-bottom: 8px;
+background: var(--input-bg);
+border: 1.5px solid var(--border);
+border-radius: var(--radius-md);
+gap: 8px;
+animation: fadeIn .2s ease-out;
+flex-wrap: wrap;
+align-items: flex-start;
+}
+.attachment-preview.active { display: flex; }
+.attachment-preview-item {
+display: flex;
+align-items: center;
+gap: 8px;
+background: var(--bg-primary);
+border: 1px solid var(--border);
+border-radius: 10px;
+padding: 6px 8px;
+max-width: 220px;
+animation: fadeIn .2s ease-out;
+}
+.attachment-preview-thumb {
+width: 42px; height: 42px;
+border-radius: 8px;
+object-fit: cover;
+border: 1px solid var(--border);
+flex-shrink: 0;
+}
+.attachment-preview-info {
+flex: 1;
+min-width: 0;
+}
+.attachment-preview-name {
+font-size: 12px;
+font-weight: 600;
+color: var(--text-primary);
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+}
+.attachment-preview-size {
+font-size: 10px;
+color: var(--text-muted);
+margin-top: 1px;
+}
+.attachment-preview-remove {
+width: 24px; height: 24px;
+border-radius: 6px;
+border: none;
+background: var(--error-bg);
+color: var(--error-text);
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+font-size: 11px;
+flex-shrink: 0;
+transition: all .2s ease;
+}
+.attachment-preview-remove:hover {
+background: var(--error-text);
+color: #fff;
+}
+
+.input-wrapper {
+display: flex;
+align-items: flex-end;
+gap: 8px;
+background: var(--input-bg);
+border: 2px solid var(--input-border);
+border-radius: var(--radius-xl);
+padding: 5px 5px 5px 10px;
+transition: border-color .25s, box-shadow .25s;
+box-shadow: var(--shadow-sm);
+}
+
+.input-wrapper:focus-within {
+border-color: var(--accent);
+box-shadow: 0 0 0 4px var(--accent-glow);
+}
+
+/* "+" Attachment button */
+.attach-btn {
+width: 38px; height: 38px;
+border-radius: 50%;
+border: 1.5px solid var(--border);
+background: var(--bg-chat);
+color: var(--text-secondary);
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+flex-shrink: 0;
+font-size: 18px;
+transition: all .2s ease;
+position: relative;
+}
+.attach-btn:hover {
+border-color: var(--accent);
+color: var(--accent);
+background: var(--accent-glow);
+}
+.attach-btn:active { transform: scale(.92); }
+
+/* Attachment popup */
+.attach-popup {
+display: none;
+position: absolute;
+bottom: calc(100% + 8px);
+left: 0;
+background: var(--bg-chat);
+border: 1.5px solid var(--border);
+border-radius: var(--radius-md);
+box-shadow: var(--shadow-lg);
+padding: 10px 0;
+min-width: 220px;
+z-index: 100;
+animation: modalSlideUp .2s cubic-bezier(.22,1,.36,1);
+}
+.attach-popup.active { display: block; }
+
+.attach-popup-title {
+font-size: 12px;
+font-weight: 700;
+color: var(--text-muted);
+text-transform: uppercase;
+letter-spacing: .6px;
+padding: 4px 16px 10px;
+}
+
+.attach-popup-item {
+display: flex;
+align-items: center;
+gap: 12px;
+padding: 11px 16px;
+cursor: pointer;
+transition: background .15s ease;
+font-size: 14px;
+font-weight: 600;
+color: var(--text-primary);
+}
+.attach-popup-item:hover {
+background: var(--accent-glow);
+color: var(--accent);
+}
+.attach-popup-item i {
+font-size: 16px;
+width: 20px;
+text-align: center;
+color: var(--accent);
+}
+
+#messageInput {
+flex: 1;
+border: none;
+outline: none;
+background: transparent;
+font-family: 'Inter', sans-serif;
+font-size: 15px;
+color: var(--text-primary);
+resize: none;
+min-height: 22px;
+max-height: 120px;
+line-height: 1.5;
+padding: 8px 0;
+}
+#messageInput::placeholder { color: var(--text-muted); }
+
+.send-btn {
+width: 42px; height: 42px;
+border-radius: 50%;
+border: none;
+background: linear-gradient(135deg, var(--accent), var(--gold));
+color: #FFF;
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+flex-shrink: 0;
+transition: all .2s ease;
+font-size: 15px;
+box-shadow: 0 4px 12px rgba(10,143,148,0.25);
+}
+
+.send-btn:hover:not(:disabled) { transform: scale(1.06); }
+.send-btn:active:not(:disabled) { transform: scale(.94); }
+.send-btn:disabled { opacity:.45; cursor: not-allowed; }
+
+.powered-by {
+text-align: center;
+font-size: 10px;
+color: var(--text-muted);
+margin-top: 7px;
+letter-spacing: .3px;
+font-weight: 500;
+}
+
+/* User bubble image */
+.user-attachment-img {
+max-width: 200px;
+max-height: 160px;
+border-radius: 12px;
+margin-top: 8px;
+display: block;
+}
+
+/* AI generated image in bubble */
+.ai-generated-img {
+max-width: 100%;
+max-height: 400px;
+border-radius: 12px;
+margin-top: 8px;
+display: block;
+cursor: pointer;
+transition: transform .2s ease;
+}
+.ai-generated-img:hover { transform: scale(1.02); }
+
+/* ── Image Generation Modal ── */
+.imggen-modal-overlay {
+display: none;
+position: fixed;
+inset: 0;
+background: rgba(0,0,0,.55);
+z-index: 2000;
+align-items: center;
+justify-content: center;
+padding: 20px;
+animation: fadeIn .2s ease-out;
+}
+.imggen-modal-overlay.active { display: flex; }
+
+.imggen-modal {
+background: var(--bg-chat);
+border-radius: var(--radius-xl);
+padding: 24px 20px;
+max-width: 420px;
+width: 100%;
+box-shadow: var(--shadow-lg);
+animation: modalSlideUp .3s cubic-bezier(.22,1,.36,1);
+border: 1px solid var(--border);
+}
+
+.imggen-modal-header {
+display: flex;
+align-items: center;
+gap: 12px;
+margin-bottom: 18px;
+}
+
+.imggen-modal-icon {
+width: 46px; height: 46px;
+border-radius: 14px;
+background: linear-gradient(135deg, #8B5CF6, #EC4899);
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+}
+.imggen-modal-icon i { color: #fff; font-size: 20px; }
+
+.imggen-modal-header h3 {
+font-size: 18px;
+font-weight: 800;
+letter-spacing: -0.3px;
+}
+.imggen-modal-header p {
+font-size: 12px;
+color: var(--text-muted);
+margin-top: 2px;
+}
+
+.imggen-textarea {
+width: 100%;
+min-height: 90px;
+max-height: 160px;
+padding: 12px 14px;
+border: 2px solid var(--input-border);
+border-radius: var(--radius-md);
+background: var(--input-bg);
+color: var(--text-primary);
+font-family: 'Inter', sans-serif;
+font-size: 14px;
+line-height: 1.5;
+resize: vertical;
+outline: none;
+transition: border-color .2s ease;
+}
+.imggen-textarea:focus {
+border-color: #8B5CF6;
+}
+.imggen-textarea::placeholder { color: var(--text-muted); }
+
+.imggen-actions {
+display: flex;
+gap: 10px;
+margin-top: 14px;
+}
+
+.imggen-generate-btn {
+flex: 1;
+padding: 12px;
+border-radius: var(--radius-md);
+border: none;
+background: linear-gradient(135deg, #8B5CF6, #EC4899);
+color: #fff;
+font-family: 'Inter', sans-serif;
+font-weight: 700;
+font-size: 14px;
+cursor: pointer;
+transition: all .2s ease;
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 8px;
+}
+.imggen-generate-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(139,92,246,0.3); }
+.imggen-generate-btn:active:not(:disabled) { transform: scale(.97); }
+.imggen-generate-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.imggen-cancel-btn {
+padding: 12px 20px;
+border-radius: var(--radius-md);
+border: 1.5px solid var(--border);
+background: var(--bg-chat);
+color: var(--text-secondary);
+font-family: 'Inter', sans-serif;
+font-weight: 600;
+font-size: 14px;
+cursor: pointer;
+transition: all .2s ease;
+}
+.imggen-cancel-btn:hover {
+border-color: var(--text-muted);
+color: var(--text-primary);
+}
+
+.imggen-spinner {
+width: 18px; height: 18px;
+border: 2.5px solid rgba(255,255,255,.3);
+border-top-color: #fff;
+border-radius: 50%;
+animation: spin .7s linear infinite;
+display: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Fullscreen image viewer */
+.fullscreen-img-overlay {
+display: none;
+position: fixed;
+inset: 0;
+background: rgba(0,0,0,.85);
+z-index: 3000;
+align-items: center;
+justify-content: center;
+padding: 20px;
+cursor: zoom-out;
+animation: fadeIn .2s ease-out;
+}
+.fullscreen-img-overlay.active { display: flex; }
+.fullscreen-img-overlay img {
+max-width: 95%;
+max-height: 95%;
+border-radius: 12px;
+object-fit: contain;
+}
+.fullscreen-download-btn {
+position: absolute;
+bottom: 24px;
+right: 24px;
+padding: 10px 18px;
+border-radius: var(--radius-md);
+border: none;
+background: linear-gradient(135deg, var(--accent), var(--gold));
+color: #fff;
+font-family: 'Inter', sans-serif;
+font-weight: 700;
+font-size: 13px;
+cursor: pointer;
+display: flex;
+align-items: center;
+gap: 6px;
+transition: transform .2s;
+}
+.fullscreen-download-btn:hover { transform: scale(1.04); }
+
+/* ── Install Modal ── */
+.install-modal-overlay {
+display: none;
+position: fixed;
+inset: 0;
+background: rgba(0,0,0,.5);
+z-index: 2000;
+align-items: center;
+justify-content: center;
+padding: 20px;
+animation: fadeIn .2s ease-out;
+}
+.install-modal-overlay.active { display: flex; }
+
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+.install-modal {
+background: var(--bg-chat);
+border-radius: var(--radius-xl);
+padding: 28px 24px;
+max-width: 360px;
+width: 100%;
+box-shadow: var(--shadow-lg);
+animation: modalSlideUp .3s cubic-bezier(.22,1,.36,1);
+text-align: center;
+border: 1px solid var(--border);
+}
+
+@keyframes modalSlideUp {
+from { opacity:0; transform: translateY(24px); }
+to { opacity:1; transform: translateY(0); }
+}
+
+.install-modal-icon {
+width: 60px; height: 60px;
+border-radius: 18px;
+background: linear-gradient(135deg, var(--accent), var(--gold));
+display: flex;
+align-items: center;
+justify-content: center;
+margin: 0 auto 14px;
+}
+.install-modal-icon i { color: #fff; font-size: 24px; }
+
+.install-modal h3 { font-size: 19px; font-weight: 800; margin-bottom: 6px; }
+.install-modal p { color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+
+.install-modal .auto-install-btn {
+width: 100%;
+padding: 13px;
+border-radius: var(--radius-md);
+border: none;
+background: linear-gradient(135deg, var(--accent), var(--gold));
+color: #fff;
+font-family: 'Inter', sans-serif;
+font-weight: 700;
+font-size: 15px;
+cursor: pointer;
+margin-bottom: 12px;
+transition: transform .2s;
+}
+.install-modal .auto-install-btn:hover { transform: scale(1.02); }
+
+.install-modal .manual-steps {
+text-align: left;
+background: var(--bg-primary);
+border-radius: var(--radius-sm);
+padding: 14px;
+margin-bottom: 14px;
+}
+
+.install-modal .manual-steps .step {
+display: flex;
+align-items: flex-start;
+gap: 10px;
+margin-bottom: 10px;
+font-size: 13px;
+color: var(--text-primary);
+line-height: 1.4;
+}
+.install-modal .manual-steps .step:last-child { margin-bottom: 0; }
+
+.install-modal .manual-steps .step-num {
+width: 22px; height: 22px;
+border-radius: 50%;
+background: var(--accent);
+color: #fff;
+display: flex;
+align-items: center;
+justify-content: center;
+font-size: 11px;
+font-weight: 700;
+flex-shrink: 0;
+}
+
+.install-modal .close-modal-btn {
+background: none;
+border: none;
+color: var(--text-muted);
+font-size: 13px;
+cursor: pointer;
+font-family: 'Inter', sans-serif;
+padding: 8px 16px;
+font-weight: 600;
+}
+.install-modal .close-modal-btn:hover { color: var(--text-primary); }
+
+/* ── Install Banner ── */
+.install-banner {
+display: none;
+position: fixed;
+bottom: 0; left: 0; right: 0;
+background: var(--glass);
+backdrop-filter: blur(40px);
+-webkit-backdrop-filter: blur(40px);
+border-top: 1px solid var(--border);
+padding: 14px 20px;
+z-index: 1000;
+animation: slideUp .4s cubic-bezier(.22,1,.36,1);
+box-shadow: 0 -4px 20px rgba(0,0,0,.08);
+}
+@keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+
+.install-banner-content { display: flex; align-items: center; gap: 12px; max-width: 500px; margin: 0 auto; }
+
+.install-banner-icon {
+width: 44px; height: 44px;
+border-radius: var(--radius-sm);
+background: linear-gradient(135deg, var(--accent), var(--gold));
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+}
+.install-banner-icon i { color: #fff; font-size: 18px; }
+
+.install-banner-text { flex: 1; }
+.install-banner-text strong { display: block; font-size: 14px; margin-bottom: 1px; }
+.install-banner-text span { font-size: 11px; color: var(--text-muted); }
+
+.install-btn {
+padding: 10px 18px;
+border-radius: 20px;
+border: none;
+background: linear-gradient(135deg, var(--accent), var(--gold));
+color: #fff;
+font-family: 'Inter', sans-serif;
+font-weight: 700;
+font-size: 13px;
+cursor: pointer;
+white-space: nowrap;
+transition: transform .2s;
+}
+.install-btn:hover { transform: scale(1.04); }
+
+.install-close {
+background: none; border: none;
+color: var(--text-muted);
+font-size: 20px; cursor: pointer;
+padding: 4px; line-height: 1;
+}
+
+/* ── Intro Splash Screen ── */
+.intro-overlay {
+display: flex;
+position: fixed;
+inset: 0;
+background: var(--bg-primary);
+z-index: 3000;
+align-items: center;
+justify-content: center;
+padding: 20px;
+animation: fadeIn .4s ease-out;
+}
+
+.intro-overlay.hidden { display: none; }
+
+.intro-container {
+max-width: 540px;
+width: 100%;
+text-align: center;
+animation: slideUpIntro .5s cubic-bezier(.4,.0,.2,1);
+}
+
+@keyframes slideUpIntro {
+from { opacity: 0; transform: translateY(20px); }
+to { opacity: 1; transform: translateY(0); }
+}
+
+.intro-icon {
+width: 80px; height: 80px;
+border-radius: 20px;
+background: linear-gradient(135deg, var(--accent), var(--accent-light));
+display: flex;
+align-items: center;
+justify-content: center;
+margin: 0 auto 32px;
+box-shadow: 0 12px 28px rgba(10,143,148,0.15);
+}
+
+.intro-icon i { font-size: 40px; color: #FFF; }
+
+.intro-title {
+font-size: 36px;
+font-weight: 800;
+letter-spacing: -0.8px;
+margin-bottom: 8px;
+color: var(--text-primary);
+}
+
+.intro-tagline {
+font-size: 13px;
+color: var(--accent);
+font-weight: 600;
+letter-spacing: 0.4px;
+text-transform: uppercase;
+margin-bottom: 20px;
+}
+
+.intro-description {
+font-size: 15px;
+line-height: 1.65;
+color: var(--text-secondary);
+margin-bottom: 40px;
+}
+
+.intro-features {
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 14px;
+margin-bottom: 36px;
+}
+
+.intro-feature {
+padding: 18px 16px;
+background: rgba(10,143,148,.04);
+border: 1px solid rgba(10,143,148,.08);
+border-radius: var(--radius-lg);
+transition: all .3s ease;
+}
+
+.intro-feature:hover {
+background: rgba(10,143,148,.08);
+border-color: rgba(10,143,148,.12);
+}
+
+.intro-feature-icon {
+font-size: 24px;
+margin-bottom: 10px;
+}
+
+.intro-feature-text {
+font-size: 12px;
+font-weight: 600;
+color: var(--text-primary);
+letter-spacing: 0.2px;
+}
+
+.intro-cta-btn {
+width: 100%;
+padding: 14px 24px;
+border-radius: var(--radius-lg);
+border: 2px solid var(--accent);
+background: var(--accent);
+color: #fff;
+font-family: 'Inter', sans-serif;
+font-weight: 600;
+font-size: 15px;
+cursor: pointer;
+transition: all .25s ease;
+box-shadow: 0 4px 12px rgba(10,143,148,0.15);
+letter-spacing: 0.3px;
+}
+
+.intro-cta-btn:hover {
+background: var(--accent-light);
+border-color: var(--accent-light);
+box-shadow: 0 6px 16px rgba(10,143,148,0.2);
+}
+
+.intro-cta-btn:active { transform: scale(.96); }
+
+/* ── Responsive Intro ── */
+@media (max-width: 480px) {
+.intro-container { padding: 0 16px; }
+.intro-title { font-size: 28px; margin-bottom: 6px; }
+.intro-tagline { margin-bottom: 16px; }
+.intro-description { font-size: 13px; margin-bottom: 32px; line-height: 1.6; }
+.intro-features { grid-template-columns: 1fr; gap: 12px; margin-bottom: 28px; }
+.intro-feature { padding: 14px 12px; }
+.intro-feature-icon { font-size: 20px; margin-bottom: 8px; }
+.intro-feature-text { font-size: 11px; }
+.intro-icon { width: 72px; height: 72px; margin-bottom: 24px; }
+.intro-icon i { font-size: 36px; }
+.intro-cta-btn { padding: 12px 20px; font-size: 14px; }
+}
+
+/* ── Intro Auth Row ── */
+.intro-auth-row {
+position: absolute;
+top: 20px;
+right: 20px;
+display: flex;
+gap: 10px;
+z-index: 10;
+}
+
+.intro-signin-btn,
+.intro-signup-btn {
+padding: 9px 22px;
+border-radius: var(--radius-md);
+font-family: 'Inter', sans-serif;
+font-weight: 600;
+font-size: 14px;
+cursor: pointer;
+transition: all .25s ease;
+letter-spacing: 0.2px;
+}
+
+.intro-signin-btn {
+background: transparent;
+border: 1.5px solid var(--border);
+color: var(--text-primary);
+}
+
+.intro-signin-btn:hover {
+border-color: var(--accent);
+color: var(--accent);
+background: var(--accent-glow);
+}
+
+.intro-signup-btn {
+background: var(--accent);
+border: 1.5px solid var(--accent);
+color: #fff;
+box-shadow: 0 4px 12px rgba(10,143,148,0.2);
+}
+
+.intro-signup-btn:hover {
+background: var(--accent-light);
+border-color: var(--accent-light);
+transform: translateY(-1px);
+}
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+.header { padding: 10px 14px; }
+.header-info h1 { font-size: 17px; }
+.chat-area { padding: 14px 10px; }
+.message-bubble { max-width: 90%; font-size: 14px; }
+.welcome h2 { font-size: 21px; }
+.welcome p { font-size: 13px; max-width: 280px; }
+.welcome-subtitle { font-size: 12px; margin-bottom: 10px; }
+.welcome-features { grid-template-columns: 1fr; gap: 10px; max-width: 280px; margin-bottom: 20px; }
+.feature-item { font-size: 11px; padding: 10px 12px; }
+.feature-icon { font-size: 16px; }
+.suggestions { gap: 6px; }
+.suggestion-chip { font-size: 12px; padding: 10px 12px; }
+.chip-icon { width: 26px; height: 26px; font-size: 11px; }
+.intro-auth-row { top: 14px; right: 14px; gap: 8px; }
+.intro-signin-btn, .intro-signup-btn { padding: 8px 16px; font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<!-- Intro Splash Screen -->
+<div class="intro-overlay" id="introOverlay">
+{% if not session.get('user') %}
+<div class="intro-auth-row">
+<button class="intro-signin-btn" id="goSignIn">Sign In</button>
+<button class="intro-signup-btn" id="goSignUp">Sign Up</button>
+</div>
+{% endif %}
+<div class="intro-container">
+<div class="intro-icon">
+<i class="fa-solid fa-bolt"></i>
+</div>
+<h1 class="intro-title">Nafti AI</h1>
+<div class="intro-tagline">Assistant IA Intelligent</div>
+<p class="intro-description">Acc&eacute;dez &agrave; une intelligence artificielle professionnelle con&ccedil;ue pour am&eacute;liorer votre productivit&eacute;. R&eacute;ponses pr&eacute;cises, rapides et adapt&eacute;es &agrave; votre contexte.</p>
+<div class="intro-features">
+<div class="intro-feature">
+<div class="intro-feature-icon"><i class="fa-solid fa-brain"></i></div>
+<div class="intro-feature-text">Intelligence avanc&eacute;e</div>
+</div>
+<div class="intro-feature">
+<div class="intro-feature-icon"><i class="fa-solid fa-bolt"></i></div>
+<div class="intro-feature-text">R&eacute;ponses instantan&eacute;es</div>
+</div>
+<div class="intro-feature">
+<div class="intro-feature-icon"><i class="fa-solid fa-shield"></i></div>
+<div class="intro-feature-text">Donn&eacute;es s&eacute;curis&eacute;es</div>
+</div>
+<div class="intro-feature">
+<div class="intro-feature-icon"><i class="fa-solid fa-sliders"></i></div>
+<div class="intro-feature-text">Hautement personnalis&eacute;e</div>
+</div>
+</div>
+<button class="intro-cta-btn" id="startBtn">{% if session.get('user') %}Acc&eacute;der &agrave; Nafti AI{% else %}Commencer{% endif %}</button>
+</div>
+</div>
+
+{% if not session.get('user') %}
+<div class="auth-page" id="authPage">
+  {% with messages = get_flashed_messages() %}
+  {% if messages %}
+  <div class="flash-messages">
+      {% for message in messages %}
+      <div>{{ message }}</div>
+      {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+  <div id="loginSection">
+  <h2>Connexion</h2>
+  <form method="post" action="/login" class="auth-form">
+    <input type="email" name="email" placeholder="Email" required>
+    <input type="password" name="password" placeholder="Mot de passe" required>
+    <button type="submit">Se connecter</button>
+  </form>
+  <p class="auth-switch">Pas encore de compte ? <a href="#" id="switchToSignUp">Cr&eacute;er un compte</a></p>
+  </div>
+  <div id="registerSection" style="display:none;">
+  <h2>Inscription</h2>
+  <form method="post" action="/register" class="auth-form">
+    <input type="email" name="email" placeholder="Email" required>
+    <input type="password" name="password" placeholder="Mot de passe" required>
+    <button type="submit">Cr&eacute;er un compte</button>
+  </form>
+  <p class="auth-switch">D&eacute;j&agrave; un compte ? <a href="#" id="switchToSignIn">Se connecter</a></p>
+  </div>
+  <a href="{{ url_for('google.login') }}" class="google-btn"><i class="fa-brands fa-google"></i>&nbsp; Continuer avec Google</a>
+</div>
+{% else %}
+
+<!-- Header -->
+<div class="header">
+<div class="logo-container">
+<i class="fa-solid fa-bolt"></i>
+</div>
+<div class="header-info">
+<h1>Nafti AI</h1>
+<p><span class="status-dot"></span>En ligne &middot; Pr&ecirc;t &agrave; r&eacute;pondre</p>
+</div>
+<div class="header-actions">
+<button class="header-btn" id="homeBtn" title="Retour &agrave; l'accueil">
+<i class="fa-solid fa-house"></i>
+</button>
+<button class="header-btn" id="historyBtn" title="Historique des conversations">
+<i class="fa-solid fa-clock-rotate-left"></i>
+</button>
+<button class="header-btn" id="themeToggleBtn" title="Changer de th&egrave;me">
+<i class="fa-solid fa-moon" id="themeIcon"></i>
+</button>
+<button class="header-btn" id="settingsBtn" title="Param&egrave;tres">
+<i class="fa-solid fa-gear"></i>
+</button>
+<button class="header-btn accent-btn" id="headerInstallBtn" title="Installer l'application">
+<i class="fa-solid fa-download"></i>
+</button>
+</div>
+</div>
+
+<!-- Install Modal -->
+<div class="install-modal-overlay" id="installModalOverlay">
+<div class="install-modal">
+<div class="install-modal-icon">
+<i class="fa-solid fa-download"></i>
+</div>
+<h3>Installer Nafti AI</h3>
+<p>Ajoutez l'application sur votre &eacute;cran d'accueil pour un acc&egrave;s rapide !</p>
+<button class="auto-install-btn" id="autoInstallBtn" style="display:none;">
+<i class="fa-solid fa-download"></i>&nbsp; Installer maintenant
+</button>
+<div class="manual-steps" id="manualSteps">
+<div class="step">
+<span class="step-num">1</span>
+<span>Appuyez sur le menu <strong>&#8942;</strong> (3 points) en haut &agrave; droite</span>
+</div>
+<div class="step">
+<span class="step-num">2</span>
+<span>Appuyez sur <strong>&laquo; Installer l'application &raquo;</strong></span>
+</div>
+<div class="step">
+<span class="step-num">3</span>
+<span>Confirmez en appuyant sur <strong>Installer</strong></span>
+</div>
+</div>
+<button class="close-modal-btn" id="closeModalBtn">Fermer</button>
+</div>
+</div>
+
+<!-- Chat Area -->
+<div class="chat-area" id="chatArea">
+<div class="welcome" id="welcomeScreen">
+<div class="welcome-icon">
+<i class="fa-solid fa-wand-magic-sparkles"></i>
+</div>
+<h2>Bienvenue sur Nafti AI</h2>
+<p>Posez-moi n'importe quelle question et je ferai de mon mieux pour vous aider.</p>
+<div class="suggestions">
+<button class="suggestion-chip" onclick="useSuggestion(this)">
+<span class="chip-icon"><i class="fa-solid fa-lightbulb"></i></span>Explique-moi un concept
+</button>
+<button class="suggestion-chip" onclick="useSuggestion(this)">
+<span class="chip-icon"><i class="fa-solid fa-code"></i></span>&Eacute;cris du code
+</button>
+<button class="suggestion-chip" onclick="useSuggestion(this)">
+<span class="chip-icon"><i class="fa-solid fa-pen-fancy"></i></span>Cr&eacute;ativit&eacute; & contenu
+</button>
+<button class="suggestion-chip" onclick="useSuggestion(this)">
+<span class="chip-icon"><i class="fa-solid fa-rocket"></i></span>Questions pratiques
+</button>
+</div>
+</div>
+</div>
+
+<!-- Input Area -->
+<div class="input-area">
+<div class="attachment-preview" id="attachmentPreview">
+<!-- items inserted dynamically -->
+</div>
+<div class="input-wrapper">
+<button class="attach-btn" id="attachBtn" title="Ajouter une pi&egrave;ce jointe">
+<i class="fa-solid fa-plus"></i>
+</button>
+<div class="attach-popup" id="attachPopup">
+<div class="attach-popup-title">T&eacute;l&eacute;charger la pi&egrave;ce jointe</div>
+<div class="attach-popup-item" id="photoLibBtn">
+<i class="fa-solid fa-image"></i>
+<span>Biblioth&egrave;que de photos</span>
+</div>
+<div class="attach-popup-item" id="imageGenBtn" style="color:#8B5CF6;">
+<i class="fa-solid fa-wand-magic-sparkles" style="color:#8B5CF6;"></i>
+<span>G&eacute;n&eacute;rer une image (IA)</span>
+</div>
+</div>
+<textarea id="messageInput" placeholder="Posez votre question..." rows="1" autocomplete="off"></textarea>
+<button class="send-btn" id="sendBtn" onclick="sendMessage()">
+<i class="fa-solid fa-paper-plane"></i>
+</button>
+</div>
+<input type="file" id="fileInput" accept="image/*" multiple style="display:none">
+<div class="powered-by">Propuls&eacute; par l'intelligence artificielle</div>
+</div>
+
+<!-- PWA Install Banner -->
+<div class="install-banner" id="installBanner">
+<div class="install-banner-content">
+<div class="install-banner-icon">
+<i class="fa-solid fa-bolt"></i>
+</div>
+<div class="install-banner-text">
+<strong>Installer Nafti AI</strong>
+<span>Ajoutez l'app sur votre t&eacute;l&eacute;phone</span>
+</div>
+<button class="install-btn" id="installBtn">Installer</button>
+<button class="install-close" id="installClose">&times;</button>
+</div>
+</div>
+
+<!-- Image Generation Modal -->
+<div class="imggen-modal-overlay" id="imggenModalOverlay">
+<div class="imggen-modal">
+<div class="imggen-modal-header">
+<div class="imggen-modal-icon">
+<i class="fa-solid fa-wand-magic-sparkles"></i>
+</div>
+<div>
+<h3>G&eacute;n&eacute;rer une image</h3>
+<p>Nano Banana</p>
+</div>
+</div>
+<textarea class="imggen-textarea" id="imggenPrompt" placeholder="D&eacute;crivez l'image que vous souhaitez g&eacute;n&eacute;rer..."></textarea>
+<div class="imggen-actions">
+<button class="imggen-cancel-btn" id="imggenCancelBtn">Annuler</button>
+<button class="imggen-generate-btn" id="imggenGenerateBtn">
+<span class="imggen-spinner" id="imggenSpinner"></span>
+<i class="fa-solid fa-sparkles" id="imggenBtnIcon"></i>
+<span id="imggenBtnText">G&eacute;n&eacute;rer</span>
+</button>
+</div>
+</div>
+</div>
+
+<!-- Fullscreen Image Viewer -->
+<div class="fullscreen-img-overlay" id="fullscreenImgOverlay">
+<img id="fullscreenImg" src="" alt="Image">
+<button class="fullscreen-download-btn" id="fullscreenDownloadBtn">
+<i class="fa-solid fa-download"></i> T&eacute;l&eacute;charger
+</button>
+</div>
+
+{% endif %}
+<script>
+  // === Intro Splash Screen ===
+  (function() {
+    var introOverlay = document.getElementById('introOverlay');
+    var startBtn = document.getElementById('startBtn');
+    var goSignIn = document.getElementById('goSignIn');
+    var goSignUp = document.getElementById('goSignUp');
+
+    function showIntro() {
+      if (introOverlay) introOverlay.classList.remove('hidden');
+    }
+
+    function hideIntro() {
+      if (introOverlay) introOverlay.classList.add('hidden');
+    }
+
+    // Check if we're loading a session - if so, don't show intro
+    var urlParams = new URLSearchParams(window.location.search);
+    var sessionParam = urlParams.get('session');
+    var skipWelcomeParam = urlParams.get('skipWelcome');
+    
+    if (sessionParam || skipWelcomeParam === '1') {
+        // We're loading a session or continuing conversation - hide intro
+        hideIntro();
+    } else {
+        // First load of the page - show intro
+        showIntro();
+    }
+
+    // Start button listener: hide intro and reveal home screen only when CTA pressed
+    if (startBtn) {
+      startBtn.addEventListener('click', function() {
+        hideIntro();
+        localStorage.setItem('firstVisit', 'true');
+        try {
+          var welcome = document.getElementById('welcomeScreen');
+          if (welcome) {
+            welcome.style.display = '';
+            welcome.style.animation = 'fadeUp .5s cubic-bezier(.22,1,.36,1)';
+          }
+          var messageInput = document.getElementById('messageInput');
+          if (messageInput) messageInput.focus();
+        } catch (e) {}
+      });
+    }
+
+    // Auth buttons on intro (for non-logged users)
+    function showLogin() {
+      var loginSection = document.getElementById('loginSection');
+      var registerSection = document.getElementById('registerSection');
+      if (loginSection) loginSection.style.display = '';
+      if (registerSection) registerSection.style.display = 'none';
+    }
+    function showRegister() {
+      var loginSection = document.getElementById('loginSection');
+      var registerSection = document.getElementById('registerSection');
+      if (loginSection) loginSection.style.display = 'none';
+      if (registerSection) registerSection.style.display = '';
+    }
+
+    // Check URL params to open auth sections directly (e.g. /?auth=login or /?auth=signup)
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var auth = params.get('auth');
+      if (auth === 'login') { hideIntro(); showLogin(); history.replaceState(null, '', window.location.pathname); }
+      else if (auth === 'signup') { hideIntro(); showRegister(); history.replaceState(null, '', window.location.pathname); }
+    } catch (e) {}
+
+    if (goSignIn) {
+      goSignIn.addEventListener('click', function() { hideIntro(); showLogin(); });
+    }
+    if (goSignUp) {
+      goSignUp.addEventListener('click', function() { hideIntro(); showRegister(); });
+    }
+
+    // Switch links inside auth page
+    var switchToSignUp = document.getElementById('switchToSignUp');
+    var switchToSignIn = document.getElementById('switchToSignIn');
+    if (switchToSignUp) {
+      switchToSignUp.addEventListener('click', function(e) { e.preventDefault(); showRegister(); });
+    }
+    if (switchToSignIn) {
+      switchToSignIn.addEventListener('click', function(e) { e.preventDefault(); showLogin(); });
+    }
+  })();
+</script>
+
+<script>
+// === PWA : Service Worker & Install Prompt ===
+(function() {
+if ('serviceWorker' in navigator) {
+navigator.serviceWorker.register('/service-worker.js')
+.then(function(reg) { console.log('SW registered', reg.scope); })
+.catch(function(err) { console.log('SW registration failed', err); });
+}
+
+var deferredPrompt = null;
+var isInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+var headerInstallBtn = document.getElementById('headerInstallBtn');
+var installModalOverlay = document.getElementById('installModalOverlay');
+var autoInstallBtn = document.getElementById('autoInstallBtn');
+var manualSteps = document.getElementById('manualSteps');
+var closeModalBtn = document.getElementById('closeModalBtn');
+var installBanner = document.getElementById('installBanner');
+var installBtn = document.getElementById('installBtn');
+var installClose = document.getElementById('installClose');
+
+// Detect device and OS
+function getDeviceInfo() {
+var ua = navigator.userAgent;
+var isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+var isAndroid = /Android/.test(ua);
+var isWindows = /Win/.test(ua);
+var isMac = /Mac/.test(ua);
+var isFirefox = /Firefox/.test(ua);
+var isChrome = /Chrome/.test(ua);
+var isEdge = /Edg/.test(ua);
+var isSafari = /Safari/.test(ua) && !isChrome;
+
+return {
+isIOS: isIOS,
+isAndroid: isAndroid,
+isWindows: isWindows,
+isMac: isMac,
+isMobile: isIOS || isAndroid,
+isFirefox: isFirefox,
+isChrome: isChrome,
+isEdge: isEdge,
+isSafari: isSafari
+};
+}
+
+// Update manual steps based on device
+function updateInstallInstructions() {
+var device = getDeviceInfo();
+var stepsHTML = '';
+
+if (device.isIOS) {
+stepsHTML = '<div class="step"><span class="step-num">1</span><span>Appuyez sur le bouton <strong>Partager</strong> (carré avec flèche)</span></div>' +
+'<div class="step"><span class="step-num">2</span><span>Faites défiler et tapez sur <strong>Sur l\'écran d\'accueil</strong></span></div>' +
+'<div class="step"><span class="step-num">3</span><span>Tapez <strong>Ajouter</strong> en haut à droite</span></div>';
+} else if (device.isAndroid && !deferredPrompt) {
+stepsHTML = '<div class="step"><span class="step-num">1</span><span>Appuyez sur le menu <strong>⋮</strong> (3 points) en haut à droite</span></div>' +
+'<div class="step"><span class="step-num">2</span><span>Appuyez sur <strong>« Installer l\'application »</strong></span></div>' +
+'<div class="step"><span class="step-num">3</span><span>Confirmez en appuyant sur <strong>Installer</strong></span></div>';
+} else if (device.isWindows || device.isMac || device.isLinux) {
+stepsHTML = '<div class="step"><span class="step-num">1</span><span>Cliquez sur le menu <strong>⋮</strong> (3 points) en haut à droite</span></div>' +
+'<div class="step"><span class="step-num">2</span><span>Cliquez sur <strong>« Installer Nafti AI »</strong></span></div>' +
+'<div class="step"><span class="step-num">3</span><span>Confirmez l\'installation</span></div>';
+}
+
+if (manualSteps) manualSteps.innerHTML = stepsHTML;
+}
+
+if (isInstalled && headerInstallBtn) headerInstallBtn.classList.add('hidden');
+
+window.addEventListener('beforeinstallprompt', function(e) {
+e.preventDefault();
+deferredPrompt = e;
+if (autoInstallBtn) autoInstallBtn.style.display = 'block';
+if (manualSteps) manualSteps.style.display = 'none';
+updateInstallInstructions();
+if (installBanner) {
+try {
+if (!localStorage.getItem('nafti-install-dismissed')) installBanner.style.display = 'block';
+} catch(ex) { installBanner.style.display = 'block'; }
+}
+});
+
+// Auto-trigger installation on first click
+var installAutoTriggered = false;
+
+function triggerInstall() {
+var device = getDeviceInfo();
+
+if (deferredPrompt && !installAutoTriggered) {
+// Android/Chrome/Edge/Firefox with deferredPrompt - trigger automatically
+installAutoTriggered = true;
+deferredPrompt.prompt();
+deferredPrompt.userChoice.then(function(result) {
+if (result.outcome === 'accepted' && headerInstallBtn) headerInstallBtn.classList.add('hidden');
+deferredPrompt = null;
+if (installBanner) installBanner.style.display = 'none';
+if (installModalOverlay) installModalOverlay.classList.remove('active');
+installAutoTriggered = false;
+});
+} else {
+// No deferredPrompt or already triggered once - show manual instructions
+updateInstallInstructions();
+if (installModalOverlay) installModalOverlay.classList.add('active');
+}
+}
+
+if (headerInstallBtn) headerInstallBtn.addEventListener('click', triggerInstall);
+if (autoInstallBtn) autoInstallBtn.addEventListener('click', triggerInstall);
+if (closeModalBtn) closeModalBtn.addEventListener('click', function() {
+if (installModalOverlay) installModalOverlay.classList.remove('active');
+});
+if (installModalOverlay) installModalOverlay.addEventListener('click', function(e) {
+if (e.target === installModalOverlay) installModalOverlay.classList.remove('active');
+});
+if (installBtn) installBtn.addEventListener('click', triggerInstall);
+if (installClose) installClose.addEventListener('click', function() {
+if (installBanner) installBanner.style.display = 'none';
+try { localStorage.setItem('nafti-install-dismissed', '1'); } catch(e) {}
+});
+
+window.addEventListener('appinstalled', function() {
+if (headerInstallBtn) headerInstallBtn.classList.add('hidden');
+if (installBanner) installBanner.style.display = 'none';
+if (installModalOverlay) installModalOverlay.classList.remove('active');
+deferredPrompt = null;
+});
+})();
+</script>
+
+<script>
+(function() {
+// === Theme Toggle ===
+var themeToggleBtn = document.getElementById('themeToggleBtn');
+var themeIcon = document.getElementById('themeIcon');
+
+function applyTheme(dark) {
+if (dark) {
+document.documentElement.classList.add('dark');
+themeIcon.classList.remove('fa-moon');
+themeIcon.classList.add('fa-sun');
+} else {
+document.documentElement.classList.remove('dark');
+themeIcon.classList.remove('fa-sun');
+themeIcon.classList.add('fa-moon');
+}
+}
+
+// Init from saved preference, fallback to system
+var saved;
+try { saved = localStorage.getItem('nafti-theme'); } catch(e) {}
+if (saved === 'dark') applyTheme(true);
+else if (saved === 'light') applyTheme(false);
+else applyTheme(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+themeToggleBtn.addEventListener('click', function() {
+var isDark = document.documentElement.classList.toggle('dark');
+applyTheme(isDark);
+try { localStorage.setItem('nafti-theme', isDark ? 'dark' : 'light'); } catch(e) {}
+});
+
+// === Home Button ===
+var homeBtn = document.getElementById('homeBtn');
+homeBtn.addEventListener('click', function() {
+var chatArea = document.getElementById('chatArea');
+var welcomeScreen = document.getElementById('welcomeScreen');
+// Remove all messages, keep welcome
+var messages = chatArea.querySelectorAll('.message-group');
+messages.forEach(function(m) { m.remove(); });
+if (welcomeScreen) {
+welcomeScreen.style.display = '';
+welcomeScreen.style.animation = 'fadeUp .5s cubic-bezier(.22,1,.36,1)';
+}
+// Clear history & session
+if (typeof conversationHistory !== 'undefined') {
+conversationHistory.length = 0;
+}
+window.currentSessionId = null;
+if (window.history.replaceState) {
+window.history.replaceState(null, '', '/');
+}
+// Reset state
+if (typeof isGenerating !== 'undefined') {
+isGenerating = false;
+}
+var sendBtn = document.getElementById('sendBtn');
+if (sendBtn) sendBtn.disabled = false;
+var messageInput = document.getElementById('messageInput');
+if (messageInput) { messageInput.value = ''; messageInput.focus(); }
+});
+
+// Configure marked
+if (typeof marked !== 'undefined') {
+marked.setOptions({ breaks: true, gfm: true });
+}
+
+function parseMarkdown(text) {
+if (typeof marked !== 'undefined' && marked.parse) return marked.parse(text);
+return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+}
+
+var chatArea = document.getElementById('chatArea');
+var messageInput = document.getElementById('messageInput');
+var sendBtn = document.getElementById('sendBtn');
+var welcomeScreen = document.getElementById('welcomeScreen');
+
+// Expose for home button
+window.isGenerating = false;
+window.conversationHistory = [];
+window.currentSessionId = null;
+window.lastFailedPrompt = null;
+
+var currentAIBubble = null;
+var AI_ENDPOINT = '/api/ai';
+window.pendingAttachments = []; // [{file, dataUrl, name, size}, ...]
+
+var SYSTEM_MESSAGE = {
+role: 'system',
+content: 'Tu es Nafti AI, un assistant intelligent et bienveillant. ' +
+'Reponds toujours en francais sauf si l\'utilisateur te parle dans une autre langue. ' +
+'Sois concis, utile et amical. Utilise le format Markdown pour structurer tes reponses quand c\'est approprie. ' +
+'Lorsque l\'utilisateur exprime un besoin, adresse-toi directement a ce besoin et, si necessaire, ' +
+'pose une question clarificatrice avant de repondre. Priorise l\'utilite et la precision.'
+};
+
+// === Attachment logic (multi) ===
+(function() {
+var attachBtn = document.getElementById('attachBtn');
+var attachPopup = document.getElementById('attachPopup');
+var photoLibBtn = document.getElementById('photoLibBtn');
+var fileInput = document.getElementById('fileInput');
+var attachmentPreview = document.getElementById('attachmentPreview');
+
+function formatSize(bytes) {
+if (bytes < 1024) return bytes + ' B';
+var kb = bytes / 1024;
+if (kb < 1024) return kb.toFixed(1) + ' KB';
+return (kb / 1024).toFixed(1) + ' MB';
+}
+
+function renderPreviews() {
+attachmentPreview.innerHTML = '';
+if (window.pendingAttachments.length === 0) {
+attachmentPreview.classList.remove('active');
+return;
+}
+attachmentPreview.classList.add('active');
+window.pendingAttachments.forEach(function(att, idx) {
+var item = document.createElement('div');
+item.className = 'attachment-preview-item';
+var thumb = document.createElement('img');
+thumb.className = 'attachment-preview-thumb';
+thumb.src = att.dataUrl;
+thumb.alt = att.name;
+var info = document.createElement('div');
+info.className = 'attachment-preview-info';
+var nameEl = document.createElement('div');
+nameEl.className = 'attachment-preview-name';
+nameEl.textContent = att.name;
+var sizeEl = document.createElement('div');
+sizeEl.className = 'attachment-preview-size';
+sizeEl.textContent = formatSize(att.size);
+info.appendChild(nameEl);
+info.appendChild(sizeEl);
+var removeBtn = document.createElement('button');
+removeBtn.className = 'attachment-preview-remove';
+removeBtn.title = 'Supprimer';
+removeBtn.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+removeBtn.addEventListener('click', function() {
+window.pendingAttachments.splice(idx, 1);
+renderPreviews();
+});
+item.appendChild(thumb);
+item.appendChild(info);
+item.appendChild(removeBtn);
+attachmentPreview.appendChild(item);
+});
+}
+
+attachBtn.addEventListener('click', function(e) {
+e.stopPropagation();
+attachPopup.classList.toggle('active');
+});
+
+document.addEventListener('click', function(e) {
+if (!attachPopup.contains(e.target) && e.target !== attachBtn) {
+attachPopup.classList.remove('active');
+}
+});
+
+photoLibBtn.addEventListener('click', function() {
+attachPopup.classList.remove('active');
+fileInput.click();
+});
+
+fileInput.addEventListener('change', function() {
+var files = Array.from(fileInput.files);
+if (!files.length) return;
+var loaded = 0;
+files.forEach(function(file) {
+var reader = new FileReader();
+reader.onload = function(ev) {
+window.pendingAttachments.push({
+file: file,
+dataUrl: ev.target.result,
+name: file.name,
+size: file.size
+});
+loaded++;
+if (loaded === files.length) renderPreviews();
+};
+reader.readAsDataURL(file);
+});
+fileInput.value = '';
+});
+
+window._renderAttachPreviews = renderPreviews;
+})();
+
+function formatBytes(bytes) {
+if (bytes < 1024) return bytes + ' B';
+if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+async function callAI(messages, images) {
+var res;
+var payload = { messages: messages, session_id: window.currentSessionId };
+if (images && images.length > 0) payload.images = images;
+try {
+res = await fetch(AI_ENDPOINT, {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify(payload)
+});
+} catch (networkErr) {
+throw new Error('Erreur reseau : ' + networkErr.message);
+}
+if (!res.ok) {
+var txt = await res.text().catch(function() { return ''; });
+throw new Error('Erreur serveur (' + res.status + '): ' + txt);
+}
+var data = await res.json().catch(function() { return {}; });
+if (data.error) {
+var errMsg = (typeof data.error === 'string') ? data.error : (data.error.message || 'Erreur API');
+throw new Error(errMsg);
+}
+if (data.choices && data.choices[0] && data.choices[0].message) {
+return data.choices[0].message.content.trim();
+}
+throw new Error('Reponse inattendue du serveur.');
+}
+
+messageInput.addEventListener('input', function() {
+messageInput.style.height = 'auto';
+messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
+});
+
+messageInput.addEventListener('keydown', function(e) {
+if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+window.useSuggestion = function(chip) {
+var text = Array.from(chip.childNodes)
+.filter(function(node) { return node.nodeType === Node.TEXT_NODE; })
+.map(function(node) { return node.textContent.trim(); })
+.join('').trim();
+messageInput.value = text;
+messageInput.dispatchEvent(new Event('input'));
+sendMessage();
+};
+
+function scrollToBottom() {
+requestAnimationFrame(function() { chatArea.scrollTop = chatArea.scrollHeight; });
+}
+
+function hideWelcome() {
+if (welcomeScreen) welcomeScreen.style.display = 'none';
+}
+
+function addUserMessage(text, imageDataUrls) {
+hideWelcome();
+var group = document.createElement('div');
+group.className = 'message-group user';
+var label = document.createElement('div');
+label.className = 'message-label';
+label.textContent = 'Vous';
+var bubble = document.createElement('div');
+bubble.className = 'message-bubble';
+if (text) bubble.textContent = text;
+if (imageDataUrls && imageDataUrls.length > 0) {
+imageDataUrls.forEach(function(url) {
+var img = document.createElement('img');
+img.src = url;
+img.className = 'user-attachment-img';
+bubble.appendChild(img);
+});
+}
+group.appendChild(label);
+group.appendChild(bubble);
+chatArea.appendChild(group);
+scrollToBottom();
+}
+
+function addAIMessage() {
+var group = document.createElement('div');
+group.className = 'message-group ai';
+var label = document.createElement('div');
+label.className = 'message-label';
+label.textContent = 'Nafti AI';
+var bubble = document.createElement('div');
+bubble.className = 'message-bubble';
+var typing = document.createElement('div');
+typing.className = 'typing-indicator';
+typing.innerHTML = '<span></span><span></span><span></span>';
+bubble.appendChild(typing);
+group.appendChild(label);
+group.appendChild(bubble);
+chatArea.appendChild(group);
+scrollToBottom();
+return bubble;
+}
+
+function showError(bubble, errorText) {
+bubble.classList.add('error-bubble');
+bubble.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> ' + errorText;
+addRetryButton(bubble);
+scrollToBottom();
+}
+
+function addRetryButton(bubble) {
+if (!window.lastFailedPrompt) return;
+var btn = document.createElement('button');
+btn.className = 'retry-btn';
+btn.innerHTML = '<i class="fa-solid fa-redo"></i> Réessayer';
+btn.onclick = function() { retryLastPrompt(); };
+var br = document.createElement('br');
+bubble.appendChild(br);
+bubble.appendChild(btn);
+}
+
+window.retryLastPrompt = function() {
+if (!window.lastFailedPrompt) return;
+var prompt = window.lastFailedPrompt;
+messageInput.value = prompt;
+messageInput.style.height = 'auto';
+sendMessage();
+};
+
+function finishGeneration() {
+window.isGenerating = false;
+currentAIBubble = null;
+sendBtn.disabled = false;
+messageInput.focus();
+}
+
+async function sendMessage(createNewSession = !window.currentSessionId) {
+var text = messageInput.value.trim();
+var attachments = window.pendingAttachments.slice();
+if ((!text && attachments.length === 0) || window.isGenerating) return;
+window.isGenerating = true;
+sendBtn.disabled = true;
+
+var imageDataUrls = attachments.map(function(a) { return a.dataUrl; });
+var imagesBase64 = imageDataUrls.length > 0 ? imageDataUrls : null;
+
+addUserMessage(text, imageDataUrls.length > 0 ? imageDataUrls : null);
+messageInput.value = '';
+messageInput.style.height = 'auto';
+
+// Clear attachments
+window.pendingAttachments = [];
+if (window._renderAttachPreviews) window._renderAttachPreviews();
+
+// Check if this is an image generation request - use more specific keywords
+var imageKeywords = ['génère', 'générer', 'dessine', 'dessine-moi', 'dessine une', 'dessine un', 'imagine-moi', 'imagine une', 'imagine un', 'peindre', 'fais une image', 'fais un dessin', 'génère une', 'génère un', 'générer une', 'générer un'];
+var isImageRequest = text.startsWith('🎨') || imageKeywords.some(function(keyword) { return text.toLowerCase().includes(keyword); });
+
+if (isImageRequest) {
+    // Get image prompt
+    var prompt = text.startsWith('🎨') ? text.substring(1).trim() : text;
+    if (!prompt) return;
+    
+    // If no session exists, create one first
+    if (!window.currentSessionId) {
+        try {
+            // Save prompt to sessionStorage before redirecting
+            sessionStorage.setItem('pendingImagePrompt', prompt);
+            
+            var sessResp = await fetch('/session/new', { method: 'POST' });
+            var sessData = await sessResp.json();
+            window.currentSessionId = sessData.id;
+            window.location.href = '/?session=' + window.currentSessionId;
+            return;
+        } catch (e) { 
+            console.error('Failed to create session', e); 
+            return;
+        }
+    }
+    
+    // Generate image directly in current session
+    var prompt = text.startsWith('🎨') ? text.substring(1).trim() : text;
+    if (!prompt) return;
+    
+    // Store prompt for retry button
+    window.lastFailedPrompt = prompt;
+    
+    // Add user prompt to conversation history
+    window.conversationHistory.push({ role: 'user', content: prompt });
+    
+    hideWelcome();
+    var aiBubble = addAIMessage();
+    
+    try {
+        var res = await fetch('/api/generate-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: prompt })
+        });
+        var data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        var imgSrc = 'data:' + (data.mime_type || 'image/png') + ';base64,' + data.image_base64;
+
+        var sourceLabel;
+        switch (data.source) {
+            case 'local':
+                sourceLabel = 'Nano Banana';
+                break;
+            case 'replicate':
+                sourceLabel = 'Replicate (SDXL / stable)';
+                break;
+            case 'huggingface':
+                sourceLabel = 'HuggingFace router';
+                break;
+            case 'pollinations':
+                sourceLabel = 'Pollinations.ai (fallback gratuit)';
+                break;
+            case 'gemini':
+            default:
+                sourceLabel = 'Gemini 2.5 Flash Image';
+        }
+        var html = '';
+        if (data.text) html += parseMarkdown(data.text);
+        html += '<img class="ai-generated-img" src="' + imgSrc + '" alt="Image générée" onclick="window._openFullscreen(this.src)">';
+        html += '<div style="margin-top:8px;font-size:11px;color:var(--text-muted);">🎨 Généré par ' + sourceLabel + '</div>';
+        aiBubble.innerHTML = html;
+        addRetryButton(aiBubble);
+        
+        // Add image response to conversation history
+        window.conversationHistory.push({ role: 'assistant', content: '🎨 Image générée: ' + prompt });
+        
+        // Save the conversation to the server
+        try {
+            var saveRes = await fetch('/api/save-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    messages: window.conversationHistory,
+                    session_id: window.currentSessionId
+                })
+            });
+            if (!saveRes.ok) console.error('Failed to save conversation');
+        } catch (saveErr) { 
+            console.error('Error saving conversation:', saveErr); 
+        }
+        
+        scrollToBottom();
+    } catch (err) {
+        // Remove the user message from history if there was an error
+        window.conversationHistory.pop();
+        showError(aiBubble, err.message || 'Erreur lors de la génération de l\'image.');
+    }
+    finishGeneration();
+    messageInput.focus();
+    return;
+}
+
+if (createNewSession) {
+    // Always create a new session for each message
+    try {
+    var sessResp = await fetch('/session/new', { method: 'POST' });
+    var sessData = await sessResp.json();
+    var newSessionId = sessData.id;
+
+    // Store the message to send after redirect
+    sessionStorage.setItem('pendingMessage', text);
+    if (attachments.length > 0) {
+        sessionStorage.setItem('pendingAttachments', JSON.stringify(attachments));
+    }
+
+    // Redirect to new session
+    window.location.href = '/?session=' + newSessionId;
+    return; // Exit here, the page will reload
+    } catch (e) { console.error('Failed to create session', e); }
+}
+
+// Send message normally in current session
+var userContent = text || '';
+if (imagesBase64 && !userContent) userContent = imagesBase64.length > 1 ? 'Analyse ces images.' : 'Analyse cette image.';
+window.conversationHistory.push({ role: 'user', content: userContent });
+var messages = [SYSTEM_MESSAGE].concat(window.conversationHistory);
+currentAIBubble = addAIMessage();
+// Store prompt for retry button
+window.lastFailedPrompt = text || (imagesBase64 ? '[Images analysées]' : '');
+try {
+var aiText = await callAI(messages, imagesBase64);
+if (currentAIBubble) {
+currentAIBubble.innerHTML = parseMarkdown(aiText);
+addRetryButton(currentAIBubble);
+window.conversationHistory.push({ role: 'assistant', content: aiText });
+}
+finishGeneration();
+scrollToBottom();
+} catch (err) {
+console.error('AI call failed', err);
+if (currentAIBubble) showError(currentAIBubble, err.message || 'Impossible de contacter le service IA.');
+window.conversationHistory.pop();
+finishGeneration();
+}
+}
+
+window.sendMessage = sendMessage;
+
+// === Image Generation (Nano Banana / Gemini) ===
+(function() {
+var imggenModalOverlay = document.getElementById('imggenModalOverlay');
+var imggenPrompt = document.getElementById('imggenPrompt');
+var imggenGenerateBtn = document.getElementById('imggenGenerateBtn');
+var imggenCancelBtn = document.getElementById('imggenCancelBtn');
+var imggenSpinner = document.getElementById('imggenSpinner');
+var imggenBtnIcon = document.getElementById('imggenBtnIcon');
+var imggenBtnText = document.getElementById('imggenBtnText');
+var imageGenBtn = document.getElementById('imageGenBtn');
+var attachPopup = document.getElementById('attachPopup');
+var fullscreenImgOverlay = document.getElementById('fullscreenImgOverlay');
+var fullscreenImg = document.getElementById('fullscreenImg');
+var fullscreenDownloadBtn = document.getElementById('fullscreenDownloadBtn');
+var currentFullscreenSrc = '';
+
+if (imageGenBtn) {
+imageGenBtn.addEventListener('click', function() {
+if (attachPopup) attachPopup.classList.remove('active');
+if (imggenModalOverlay) imggenModalOverlay.classList.add('active');
+if (imggenPrompt) { imggenPrompt.value = ''; imggenPrompt.focus(); }
+});
+}
+
+if (imggenCancelBtn) {
+imggenCancelBtn.addEventListener('click', function() {
+if (imggenModalOverlay) imggenModalOverlay.classList.remove('active');
+});
+}
+
+if (imggenModalOverlay) {
+imggenModalOverlay.addEventListener('click', function(e) {
+if (e.target === imggenModalOverlay) imggenModalOverlay.classList.remove('active');
+});
+}
+
+function setImggenLoading(loading) {
+if (loading) {
+imggenGenerateBtn.disabled = true;
+imggenSpinner.style.display = 'block';
+imggenBtnIcon.style.display = 'none';
+imggenBtnText.textContent = 'G\u00e9n\u00e9ration...';
+} else {
+imggenGenerateBtn.disabled = false;
+imggenSpinner.style.display = 'none';
+imggenBtnIcon.style.display = '';
+imggenBtnText.textContent = 'G\u00e9n\u00e9rer';
+}
+}
+
+if (imggenGenerateBtn) {
+imggenGenerateBtn.addEventListener('click', async function() {
+var prompt = imggenPrompt.value.trim();
+if (!prompt) return;
+setImggenLoading(true);
+imggenModalOverlay.classList.remove('active');
+hideWelcome();
+
+// Show user message with prompt
+addUserMessage('\ud83c\udfa8 ' + prompt);
+
+// Show AI thinking bubble
+var aiBubble = addAIMessage();
+
+try {
+var res = await fetch('/api/generate-image', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ prompt: prompt })
+});
+var data = await res.json();
+if (data.error) throw new Error(data.error);
+
+var imgSrc = 'data:' + (data.mime_type || 'image/png') + ';base64,' + data.image_base64;
+
+var sourceLabel;
+switch (data.source) {
+    case 'local':
+        sourceLabel = 'Nano Banana';
+        break;
+    case 'replicate':
+        sourceLabel = 'Replicate (SDXL / stable)';
+        break;
+    case 'huggingface':
+        sourceLabel = 'HuggingFace router';
+        break;
+    case 'pollinations':
+        sourceLabel = 'Pollinations.ai (fallback gratuit)';
+        break;
+    case 'gemini':
+    default:
+        sourceLabel = 'Gemini 2.5 Flash Image';
+}
+var html = '';
+if (data.text) html += parseMarkdown(data.text);
+html += '<img class="ai-generated-img" src="' + imgSrc + '" alt="Image g\u00e9n\u00e9r\u00e9e" onclick="window._openFullscreen(this.src)">';
+html += '<div style="margin-top:8px;font-size:11px;color:var(--text-muted);">\ud83c\udfa8 G\u00e9n\u00e9r\u00e9 par ' + sourceLabel + '</div>';
+aiBubble.innerHTML = html;
+scrollToBottom();
+} catch (err) {
+showError(aiBubble, err.message || 'Erreur lors de la g\u00e9n\u00e9ration de l\'image.');
+}
+setImggenLoading(false);
+messageInput.focus();
+});
+}
+
+// Fullscreen image viewer
+window._openFullscreen = function(src) {
+currentFullscreenSrc = src;
+if (fullscreenImg) fullscreenImg.src = src;
+if (fullscreenImgOverlay) fullscreenImgOverlay.classList.add('active');
+};
+
+if (fullscreenImgOverlay) {
+fullscreenImgOverlay.addEventListener('click', function(e) {
+if (e.target === fullscreenImgOverlay || e.target === fullscreenImg) {
+fullscreenImgOverlay.classList.remove('active');
+}
+});
+}
+
+if (fullscreenDownloadBtn) {
+fullscreenDownloadBtn.addEventListener('click', function(e) {
+e.stopPropagation();
+if (!currentFullscreenSrc) return;
+var a = document.createElement('a');
+a.href = currentFullscreenSrc;
+a.download = 'nafti-ai-image-' + Date.now() + '.png';
+document.body.appendChild(a);
+a.click();
+document.body.removeChild(a);
+});
+}
+})();
+
+// History button
+var historyBtn = document.getElementById('historyBtn');
+if (historyBtn) {
+historyBtn.addEventListener('click', function() {
+window.location.href = '/history';
+});
+}
+
+// Settings button
+var settingsBtn = document.getElementById('settingsBtn');
+if (settingsBtn) {
+settingsBtn.addEventListener('click', function() {
+window.location.href = '/settings';
+});
+}
+
+// Load session from URL params
+var urlParams = new URLSearchParams(window.location.search);
+var sessionParam = urlParams.get('session');
+var skipWelcomeParam = urlParams.get('skipWelcome');
+if (sessionParam) {
+// always clear the URL parameter first, we'll restore if needed
+history.replaceState({}, '', window.location.pathname + (skipWelcomeParam ? '?skipWelcome=1' : ''));
+window.currentSessionId = sessionParam;
+fetch('/api/session/' + sessionParam)
+.then(function(r) { return r.json(); })
+.then(function(data) {
+    // if there are messages or we have pending work, load the session
+    var pendingMessage = sessionStorage.getItem('pendingMessage');
+    var pendingImagePrompt = sessionStorage.getItem('pendingImagePrompt');
+    var hasPending = !!pendingMessage || !!pendingImagePrompt;
+    if (skipWelcomeParam === '1') {
+        hasPending = true; // treat as needing flow
+    }
+    if ((data.messages && data.messages.length > 0) || hasPending) {
+        // we're loading a conversation, make sure welcome is hidden
+        var welcome = document.getElementById('welcomeScreen');
+        if (welcome) welcome.style.display = 'none';
+        if (data.messages && data.messages.length > 0) {
+            data.messages.forEach(function(m) {
+                if (m.role === 'user') {
+                    addUserMessage(m.content);
+                } else if (m.role === 'assistant') {
+                    var bubble = addAIMessage();
+                    bubble.innerHTML = parseMarkdown(m.content);
+                }
+                window.conversationHistory.push(m);
+            });
+        }
+        // if there was a pending image prompt (redirect from image generation)
+        if (pendingImagePrompt) {
+            sessionStorage.removeItem('pendingImagePrompt');
+            // Trigger image generation with the pending prompt
+            (async function() {
+                window.conversationHistory.push({ role: 'user', content: pendingImagePrompt });
+                var aiBubble = addAIMessage();
+                try {
+                    var res = await fetch('/api/generate-image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: pendingImagePrompt })
+                    });
+                    var data = await res.json();
+                    if (data.error) throw new Error(data.error);
+                    
+                    var imgSrc = 'data:' + (data.mime_type || 'image/png') + ';base64,' + data.image_base64;
+                    var sourceLabel;
+                    switch (data.source) {
+                        case 'local':
+                            sourceLabel = 'Nano Banana';
+                            break;
+                        case 'replicate':
+                            sourceLabel = 'Replicate (SDXL / stable)';
+                            break;
+                        case 'huggingface':
+                            sourceLabel = 'HuggingFace router';
+                            break;
+                        case 'pollinations':
+                            sourceLabel = 'Pollinations.ai (fallback gratuit)';
+                            break;
+                        case 'gemini':
+                        default:
+                            sourceLabel = 'Gemini 2.5 Flash Image';
+                    }
+                    var html = '';
+                    if (data.text) html += parseMarkdown(data.text);
+                    html += '<img class="ai-generated-img" src="' + imgSrc + '" alt="Image générée" onclick="window._openFullscreen(this.src)">';
+                    html += '<div style="margin-top:8px;font-size:11px;color:var(--text-muted);">🎨 Généré par ' + sourceLabel + '</div>';
+                    aiBubble.innerHTML = html;
+                    
+                    window.conversationHistory.push({ role: 'assistant', content: '🎨 Image générée: ' + pendingImagePrompt });
+                    
+                    // Save to server
+                    try {
+                        await fetch('/api/save-session', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                messages: window.conversationHistory,
+                                session_id: window.currentSessionId
+                            })
+                        });
+                    } catch (err) { 
+                        console.error('Error saving conversation:', err); 
+                    }
+                } catch (err) {
+                    window.conversationHistory.pop();
+                    if (aiBubble) {
+                        aiBubble.classList.add('error-bubble');
+                        aiBubble.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> ' + (err.message || 'Erreur lors de la génération de l\'image.');
+                    }
+                }
+                scrollToBottom();
+            })();
+        }
+        // if there was a pending message (redirect from new session)
+        else if (pendingMessage) {
+            sessionStorage.removeItem('pendingMessage');
+            var pendingAttachments = sessionStorage.getItem('pendingAttachments');
+            if (pendingAttachments) {
+                sessionStorage.removeItem('pendingAttachments');
+                window.pendingAttachments = JSON.parse(pendingAttachments);
+            }
+            messageInput.value = pendingMessage;
+            if (window.pendingAttachments.length > 0 && window._renderAttachPreviews) {
+                window._renderAttachPreviews();
+            }
+            sendMessage(false);
+        }
+        scrollToBottom();
+    } else {
+        // no messages and nothing pending: this shouldn't happen with our new logic
+        window.currentSessionId = null;
+    }
+})
+.catch(function(e) { console.error('Failed to load session', e); });
+}
+})();
+</script>
+
+</body>
+</html>

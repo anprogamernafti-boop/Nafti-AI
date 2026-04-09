@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM pytorch/pytorch:2.0-cuda11.8-runtime-ubuntu22.04
 
 WORKDIR /app
 
@@ -13,4 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD ["python", "streamlit_app.py"]
+ENV PYTHONUNBUFFERED=1
+EXPOSE 5000
+
+CMD ["python", "server.py"]

@@ -7,6 +7,13 @@ import json
 import hashlib
 import uuid
 import base64
+import torch
+from diffusers import StableDiffusionXLPipeline
+from PIL import Image
+from io import BytesIO
+
+# Autoriser OAuth en HTTP pour le développement local
+os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT', '1')
 from pathlib import Path
 from datetime import datetime
 from flask_dance.contrib.google import make_google_blueprint, google
@@ -99,9 +106,34 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# Configuration Gemini (image generation)
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_IMAGE_MODEL = os.getenv("GEMINI_IMAGE_MODEL", "gemini-2.5-flash-image")
+# Configuration Hugging Face (image generation with SDXL - local)
+HF_IMAGE_MODEL = os.getenv("HF_IMAGE_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
+LOCAL_STEPS = int(os.getenv("LOCAL_STEPS", "30"))
+LOCAL_GUIDANCE = float(os.getenv("LOCAL_GUIDANCE", "7.5"))
+LOCAL_WIDTH = int(os.getenv("LOCAL_WIDTH", "1024"))
+LOCAL_HEIGHT = int(os.getenv("LOCAL_HEIGHT", "1024"))
+
+# Global pipeline (loaded once, reused)
+image_pipeline = None
+
+def get_image_pipeline():
+    """Load SDXL pipeline (cached globally to save memory)"""
+    global image_pipeline
+    if image_pipeline is None:
+        try:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"📦 Chargement du modèle SDXL sur {device}...")
+            image_pipeline = StableDiffusionXLPipeline.from_pretrained(
+                HF_IMAGE_MODEL,
+                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+                use_safetensors=True
+            )
+            image_pipeline.to(device)
+            print(f"✅ Modèle chargé sur {device}")
+        except Exception as e:
+            print(f"❌ Erreur chargement modèle: {e}")
+            return None
+    return image_pipeline
 
 # Google OAuth blueprint
 google_bp = make_google_blueprint(
@@ -122,6 +154,11 @@ def index():
         histories = ensure_user_sessions(user)
         sessions = histories.get(user, [])
     return render_template('index.html', sessions=sessions)
+
+@app.route('/generate-image')
+def generate_image():
+    """Render the image generation page"""
+    return render_template('generate.html')
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -159,9 +196,6 @@ def login():
 
 @app.route('/settings')
 def settings_view():
-    user = session.get('user')
-    if not user:
-        return redirect(url_for('index'))
     return render_template('settings.html')
 
 @app.route('/sessions/clear-all', methods=['POST'])
@@ -177,10 +211,8 @@ def clear_all_sessions():
 @app.route('/history')
 def history_view():
     user = session.get('user')
-    if not user:
-        return redirect(url_for('index'))
     histories = load_history()
-    sessions = histories.get(user, [])
+    sessions = histories.get(user, []) if user else []
     return render_template('history.html', sessions=sessions)
 
 @app.route('/session/new', methods=['POST'])
@@ -261,6 +293,55 @@ def google_callback():
 def service_worker():
     """Le service worker doit être servi depuis la racine pour couvrir tout le site"""
     return send_from_directory("static", "service-worker.js", mimetype="application/javascript")
+
+
+@app.route("/api/chat", methods=["POST"])
+def chat_public():
+    """Public chat endpoint - creates anonymous user if needed"""
+    if not GROQ_API_KEY:
+        return jsonify({"error": "Clé API Groq manquante"}), 500
+
+    # Create anonymous session if not logged in
+    if 'user' not in session:
+        session['user'] = f"anonymous_{uuid.uuid4().hex[:8]}"
+
+    data = request.get_json()
+    message = data.get("message", "").strip()
+    
+    if not message:
+        return jsonify({"error": "Message requis"}), 400
+
+    try:
+        response = requests.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": GROQ_MODEL,
+                "messages": [{"role": "user", "content": message}],
+                "max_tokens": 2048,
+                "temperature": 0.7
+            },
+            timeout=30
+        )
+        response.raise_for_status()
+        result = response.json()
+        
+        ai_message = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+        
+        if not ai_message:
+            return jsonify({"error": "Pas de réponse de l'IA"}), 500
+        
+        return jsonify({"response": ai_message, "user": session.get('user')})
+    
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "Timeout - API trop lent"}), 504
+    except requests.exceptions.HTTPError as e:
+        return jsonify({"error": f"Erreur API: {str(e)}"}), 502
+    except Exception as e:
+        return jsonify({"error": f"Erreur: {str(e)}"}), 500
 
 
 @app.route("/api/ai", methods=["POST"])
@@ -382,83 +463,106 @@ def proxy_ai():
         return jsonify({"error": f"Erreur réseau: {str(e)}"}), 502
 
 
+@app.route("/generate", methods=["POST"])
+def generate_public():
+    """Public endpoint for image generation using local SDXL"""
+    data = request.get_json()
+    prompt = data.get("prompt", "").strip()
+    if not prompt:
+        return jsonify({"error": "Veuillez fournir une description pour l'image."}), 400
+
+    try:
+        pipeline = get_image_pipeline()
+        if pipeline is None:
+            return jsonify({"error": "Impossible de charger le modèle d'image. Vérifiez PyTorch."}), 500
+
+        enhanced_prompt = f"{prompt}, masterpiece, 8k, professional studio quality, cinematic lighting, sharp focus, beautiful composition"
+        negative_prompt = "low quality, blurry, distorted, watermark, text, artifacts, ugly, deformed, dull colors"
+
+        with torch.no_grad():
+            image = pipeline(
+                prompt=enhanced_prompt,
+                negative_prompt=negative_prompt,
+                height=LOCAL_HEIGHT,
+                width=LOCAL_WIDTH,
+                num_inference_steps=LOCAL_STEPS,
+                guidance_scale=LOCAL_GUIDANCE
+            ).images[0]
+
+        buffered = BytesIO()
+        image.save(buffered, format="PNG")
+        image_base64 = base64.b64encode(buffered.getvalue()).decode()
+
+        return jsonify({
+            "image_base64": image_base64,
+            "mime_type": "image/png",
+            "text": f"Image générée: {prompt}"
+        })
+
+    except RuntimeError as e:
+        if "out of memory" in str(e):
+            return jsonify({"error": "Mémoire insuffisante. Réduisez la taille ou les étapes."}), 507
+        return jsonify({"error": f"Erreur: {str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"Erreur: {str(e)}"}), 500
+
+
 @app.route("/api/generate-image", methods=["POST"])
-def generate_image():
-    """Generate an image using Gemini (Nano Banana) and return base64"""
+def api_generate_image():
+    """Generate an image using local SDXL (diffusers) - Authenticated endpoint"""
     if 'user' not in session:
         return jsonify({"error": "Unauthorized"}), 401
-    if not GEMINI_API_KEY:
-        return jsonify({"error": "Clé API Gemini manquante. Vérifiez votre fichier .env"}), 500
 
     data = request.get_json()
     prompt = data.get("prompt", "").strip()
     if not prompt:
         return jsonify({"error": "Veuillez fournir une description pour l'image."}), 400
 
-    gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_IMAGE_MODEL}:generateContent?key={GEMINI_API_KEY}"
-
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt}
-                ]
-            }
-        ],
-        "generationConfig": {
-            "responseModalities": ["TEXT", "IMAGE"]
-        }
-    }
+    # Get optional parameters
+    width = data.get("width", LOCAL_WIDTH)
+    height = data.get("height", LOCAL_HEIGHT)
+    steps = data.get("steps", LOCAL_STEPS)
+    guidance = data.get("guidance", LOCAL_GUIDANCE)
 
     try:
-        response = requests.post(
-            gemini_url,
-            headers={"Content-Type": "application/json"},
-            json=payload,
-            timeout=120,
-        )
-        response.raise_for_status()
-        result = response.json()
+        pipeline = get_image_pipeline()
+        if pipeline is None:
+            return jsonify({"error": "Impossible de charger le modèle d'image. Vérifiez PyTorch."}), 500
 
-        # Extract image and text from Gemini response
-        image_base64 = None
-        mime_type = None
-        text_response = ""
+        # Add professional prompt enhancement
+        enhanced_prompt = f"{prompt}, masterpiece, 8k, professional studio quality, cinematic lighting, sharp focus, beautiful composition, hyper-detailed"
+        negative_prompt = "low quality, blurry, distorted, watermark, text, artifacts, ugly, deformed, dull colors"
 
-        candidates = result.get("candidates", [])
-        if candidates:
-            parts = candidates[0].get("content", {}).get("parts", [])
-            for part in parts:
-                if "inlineData" in part:
-                    image_base64 = part["inlineData"]["data"]
-                    mime_type = part["inlineData"].get("mimeType", "image/png")
-                elif "text" in part:
-                    text_response = part["text"]
+        # Generate image
+        with torch.no_grad():
+            image = pipeline(
+                prompt=enhanced_prompt,
+                negative_prompt=negative_prompt,
+                height=height,
+                width=width,
+                num_inference_steps=steps,
+                guidance_scale=guidance
+            ).images[0]
 
-        if not image_base64:
-            return jsonify({"error": "Aucune image générée. Essayez un autre prompt."}), 500
+        # Convert to base64
+        buffered = BytesIO()
+        image.save(buffered, format="PNG")
+        image_base64 = base64.b64encode(buffered.getvalue()).decode()
 
         return jsonify({
             "image_base64": image_base64,
-            "mime_type": mime_type,
-            "text": text_response
+            "mime_type": "image/png",
+            "text": f"Image générée avec SDXL: {prompt}"
         })
 
-    except requests.exceptions.Timeout:
-        return jsonify({"error": "La génération d'image a pris trop de temps."}), 504
-    except requests.exceptions.HTTPError as e:
-        detail = ""
-        status_code = 502
-        if e.response is not None:
-            status_code = e.response.status_code
-            try:
-                err_data = e.response.json().get("error", {})
-                detail = err_data.get("message", e.response.text)
-            except Exception:
-                detail = e.response.text
-        return jsonify({"error": f"Erreur API Gemini: {detail or str(e)}"}), status_code
-    except requests.exceptions.RequestException as e:
-        return jsonify({"error": f"Erreur réseau: {str(e)}"}), 502
+    except RuntimeError as e:
+        if "out of memory" in str(e):
+            return jsonify({
+                "error": "Mémoire insuffisante. Réduisez la taille (ex: 512x512) ou le nombre d'étapes."
+            }), 507
+        return jsonify({"error": f"Erreur GPU: {str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"Erreur: {str(e)}"}), 500
 
 
 @app.route('/api/session/<session_id>')
@@ -479,9 +583,8 @@ if __name__ == "__main__":
     print(f"  📍 http://0.0.0.0:{port}")
     print(f"  🤖 Modèle texte: {GROQ_MODEL}")
     print(f"  🖼️  Modèle vision: {GROQ_VISION_MODEL}")
-    print(f"  🎨 Modèle image: {GEMINI_IMAGE_MODEL}")
+    print(f"  🎨 Modèle image: {HF_IMAGE_MODEL} (Local SDXL)")
     print(f"  🔑 Clé Groq: {'✅ configurée' if GROQ_API_KEY else '❌ MANQUANTE'}")
-    print(f"  🔑 Clé Gemini: {'✅ configurée' if GEMINI_API_KEY else '❌ MANQUANTE'}")
-    print(f"  📁 Utilisateurs: {USERS_FILE} (auto-créé)")
+    print(f"  💾 Utilisateurs: {USERS_FILE} (auto-créé)")
     print("=" * 50)
     app.run(host="0.0.0.0", port=port, debug=False)

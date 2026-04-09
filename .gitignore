@@ -7,7 +7,22 @@ __pycache__/
 *.pyo
 venv/
 .venv/
+*.egg-info/
+dist/
+build/
+
+# Données utilisateurs
+history.json
+users.json
 
 # OS
 .DS_Store
 Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Cache
+*.cache
+.pytest_cache/

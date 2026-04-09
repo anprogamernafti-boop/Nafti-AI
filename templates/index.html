@@ -1,307 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nafti AI - Image Generator</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        
-        .container {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 800px;
-            width: 100%;
-            padding: 40px;
-        }
-        
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 28px;
-        }
-        
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            color: #333;
-            font-weight: 500;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        
-        textarea, input[type="number"] {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-            font-family: inherit;
-        }
-        
-        textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-        
-        .slider-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-        
-        .slider-item {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .slider-item label {
-            margin-bottom: 8px;
-        }
-        
-        input[type="range"] {
-            width: 100%;
-            cursor: pointer;
-        }
-        
-        .slider-value {
-            font-size: 12px;
-            color: #666;
-            margin-top: 4px;
-        }
-        
-        button {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: opacity 0.2s, transform 0.2s;
-            margin-top: 10px;
-        }
-        
-        button:hover {
-            opacity: 0.9;
-            transform: translateY(-2px);
-        }
-        
-        button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .output {
-            margin-top: 30px;
-            text-align: center;
-            display: none;
-        }
-        
-        .output.active {
-            display: block;
-        }
-        
-        .output img {
-            max-width: 100%;
-            border-radius: 8px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
-        
-        .loader {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .loader.active {
-            display: block;
-        }
-        
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .error {
-            background: #fee;
-            color: #c33;
-            padding: 12px;
-            border-radius: 6px;
-            margin-top: 10px;
-            display: none;
-            font-size: 14px;
-        }
-        
-        .error.active {
-            display: block;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Nafti AI</h1>
-        <p class="subtitle">Free SDXL Image Generation - Powered by Hugging Face Spaces</p>
-        
-        <div class="form-group">
-            <label for="prompt">Describe what you want to generate:</label>
-            <textarea id="prompt" placeholder="A beautiful sunset over mountains, oil painting style..."></textarea>
-        </div>
-        
-        <div class="slider-group">
-            <div class="slider-item">
-                <label for="width">Width: <span id="widthValue">512</span></label>
-                <input type="range" id="width" min="256" max="1024" step="64" value="512">
-            </div>
-            <div class="slider-item">
-                <label for="height">Height: <span id="heightValue">512</span></label>
-                <input type="range" id="height" min="256" max="1024" step="64" value="512">
-            </div>
-        </div>
-        
-        <div class="slider-group" style="margin-top: 15px;">
-            <div class="slider-item">
-                <label for="steps">Steps: <span id="stepsValue">25</span></label>
-                <input type="range" id="steps" min="15" max="50" step="1" value="25">
-            </div>
-            <div class="slider-item">
-                <label for="guidance">Guidance: <span id="guidanceValue">7.5</span></label>
-                <input type="range" id="guidance" min="1" max="20" step="0.5" value="7.5">
-            </div>
-        </div>
-        
-        <button id="generateBtn" onclick="generate()">Generate Image</button>
-        
-        <div class="error" id="error"></div>
-        
-        <div class="loader" id="loader">
-            <div class="spinner"></div>
-            <p>Generating image, this may take 2-3 minutes...</p>
-        </div>
-        
-        <div class="output" id="output">
-            <img id="resultImage" src="" alt="Generated image">
-        </div>
-    </div>
-    
-    <script>
-        // Update slider display values
-        document.getElementById('width').addEventListener('input', (e) => {
-            document.getElementById('widthValue').textContent = e.target.value;
-        });
-        document.getElementById('height').addEventListener('input', (e) => {
-            document.getElementById('heightValue').textContent = e.target.value;
-        });
-        document.getElementById('steps').addEventListener('input', (e) => {
-            document.getElementById('stepsValue').textContent = e.target.value;
-        });
-        document.getElementById('guidance').addEventListener('input', (e) => {
-            document.getElementById('guidanceValue').textContent = e.target.value;
-        });
-        
-        async function generate() {
-            const prompt = document.getElementById('prompt').value;
-            const width = document.getElementById('width').value;
-            const height = document.getElementById('height').value;
-            const steps = document.getElementById('steps').value;
-            const guidance = document.getElementById('guidance').value;
-            const errorDiv = document.getElementById('error');
-            const loader = document.getElementById('loader');
-            const output = document.getElementById('output');
-            const btn = document.getElementById('generateBtn');
-            
-            if (!prompt.trim()) {
-                errorDiv.textContent = 'Please enter a prompt';
-                errorDiv.classList.add('active');
-                return;
-            }
-            
-            errorDiv.classList.remove('active');
-            loader.classList.add('active');
-            output.classList.remove('active');
-            btn.disabled = true;
-            
-            try {
-                const response = await fetch('/generate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        prompt,
-                        width,
-                        height,
-                        steps,
-                        guidance
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.error || 'Generation failed');
-                }
-                
-                document.getElementById('resultImage').src = data.image;
-                output.classList.add('active');
-                loader.classList.remove('active');
-            } catch (error) {
-                errorDiv.textContent = 'Error: ' + error.message;
-                errorDiv.classList.add('active');
-                loader.classList.remove('active');
-            } finally {
-                btn.disabled = false;
-            }
-        }
-        
-        // Allow Enter key in textarea
-        document.getElementById('prompt').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && e.ctrlKey) {
-                generate();
-            }
-        });
-    </script>
-</body>
-</html>
-
-
-
 <!-- PWA Meta Tags -->
 <link rel="manifest" href="/static/manifest.json">
 <meta name="theme-color" content="#0D7377">
@@ -535,44 +231,65 @@ align-items: center;
 justify-content: center;
 height: 100%;
 padding: 20px;
+position: relative;
+z-index: 1;
 }
 .auth-form {
-margin-bottom: 16px;
+margin-bottom: 12px;
 max-width: 320px;
 width: 100%;
 }
 .auth-form input {
 width: 100%;
-padding: 10px;
-margin-bottom: 8px;
-border: 1px solid var(--border);
+padding: 12px 14px;
+margin-bottom: 10px;
+border: 2px solid var(--input-border);
 border-radius: var(--radius-md);
+background: var(--input-bg);
+color: var(--text-primary);
+font-family: 'Inter', sans-serif;
+font-size: 14px;
+outline: none;
+transition: border-color .2s;
 }
+.auth-form input:focus { border-color: var(--accent); }
+.auth-form input::placeholder { color: var(--text-muted); }
 .auth-form button {
 width: 100%;
-padding: 10px;
-background: var(--accent);
+padding: 12px;
+background: linear-gradient(135deg, var(--accent), var(--gold));
 color:#fff;
 border:none;
 border-radius: var(--radius-md);
 cursor:pointer;
+font-family: 'Inter', sans-serif;
+font-weight: 700;
+font-size: 15px;
+transition: transform .2s, opacity .2s;
 }
+.auth-form button:hover { opacity: .9; transform: translateY(-1px); }
 .google-btn {
 display:inline-flex;
 align-items:center;
-margin-top:16px;
-padding:11px 20px;
-background:#4285F4;
-color:#fff;
+justify-content: center;
+width: 100%;
+max-width: 320px;
+margin-top:10px;
+padding:12px 20px;
+background:#fff;
+color:#444;
+border: 1.5px solid var(--border);
 border-radius:var(--radius-md);
 text-decoration:none;
 font-family:'Inter',sans-serif;
 font-weight:600;
 font-size:14px;
 transition: all .2s ease;
-box-shadow: 0 2px 8px rgba(66,133,244,0.25);
+box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
-.google-btn:hover { background:#3367D6; transform:translateY(-1px); }
+.google-btn:hover { background:#f5f5f5; transform:translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+html.dark .google-btn { background: var(--input-bg); color: var(--text-primary); border-color: var(--border); }
+html.dark .google-btn:hover { background: var(--bg-primary); }
 
 .auth-switch {
 margin-top:12px;
@@ -1660,8 +1377,8 @@ transform: translateY(-1px);
 <div class="intro-overlay" id="introOverlay">
 {% if not session.get('user') %}
 <div class="intro-auth-row">
-<button class="intro-signin-btn" id="goSignIn">Sign In</button>
-<button class="intro-signup-btn" id="goSignUp">Sign Up</button>
+  <button class="intro-signin-btn" id="goSignIn">Sign In</button>
+  <button class="intro-signup-btn" id="goSignUp">Sign Up</button>
 </div>
 {% endif %}
 <div class="intro-container">
@@ -1694,37 +1411,57 @@ transform: translateY(-1px);
 </div>
 
 {% if not session.get('user') %}
-<div class="auth-page" id="authPage">
+<!-- Auth Page -->
+<div class="auth-page" id="authPage" style="display:none;">
   {% with messages = get_flashed_messages() %}
   {% if messages %}
-  <div class="flash-messages">
-      {% for message in messages %}
-      <div>{{ message }}</div>
-      {% endfor %}
+  <div style="background:var(--error-bg);color:var(--error-text);padding:10px 14px;border-radius:var(--radius-md);margin-bottom:12px;font-size:13px;max-width:320px;width:100%;">
+    {% for message in messages %}{{ message }}{% endfor %}
   </div>
   {% endif %}
   {% endwith %}
+
+  <!-- Login -->
   <div id="loginSection">
-  <h2>Connexion</h2>
-  <form method="post" action="/login" class="auth-form">
-    <input type="email" name="email" placeholder="Email" required>
-    <input type="password" name="password" placeholder="Mot de passe" required>
-    <button type="submit">Se connecter</button>
-  </form>
-  <p class="auth-switch">Pas encore de compte ? <a href="#" id="switchToSignUp">Cr&eacute;er un compte</a></p>
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--gold));display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+        <i class="fa-solid fa-bolt" style="color:#fff;font-size:22px;"></i>
+      </div>
+      <h2 style="font-size:22px;font-weight:800;letter-spacing:-0.4px;">Connexion</h2>
+      <p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Bienvenue sur Nafti AI</p>
+    </div>
+    <form method="post" action="/login" class="auth-form">
+      <input type="email" name="email" placeholder="Adresse email" required autocomplete="email">
+      <input type="password" name="password" placeholder="Mot de passe" required autocomplete="current-password">
+      <button type="submit">Se connecter</button>
+    </form>
+    <a href="{{ url_for('google.login') }}" class="google-btn">
+      <i class="fa-brands fa-google" style="margin-right:8px;"></i> Continuer avec Google
+    </a>
+    <p class="auth-switch">Pas encore de compte ? <a href="#" id="switchToSignUp">Cr&eacute;er un compte</a></p>
   </div>
+
+  <!-- Register -->
   <div id="registerSection" style="display:none;">
-  <h2>Inscription</h2>
-  <form method="post" action="/register" class="auth-form">
-    <input type="email" name="email" placeholder="Email" required>
-    <input type="password" name="password" placeholder="Mot de passe" required>
-    <button type="submit">Cr&eacute;er un compte</button>
-  </form>
-  <p class="auth-switch">D&eacute;j&agrave; un compte ? <a href="#" id="switchToSignIn">Se connecter</a></p>
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--gold));display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+        <i class="fa-solid fa-user-plus" style="color:#fff;font-size:20px;"></i>
+      </div>
+      <h2 style="font-size:22px;font-weight:800;letter-spacing:-0.4px;">Inscription</h2>
+      <p style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Cr&eacute;ez votre compte gratuit</p>
+    </div>
+    <form method="post" action="/register" class="auth-form">
+      <input type="email" name="email" placeholder="Adresse email" required autocomplete="email">
+      <input type="password" name="password" placeholder="Mot de passe" required autocomplete="new-password">
+      <button type="submit">Cr&eacute;er un compte</button>
+    </form>
+    <a href="{{ url_for('google.login') }}" class="google-btn">
+      <i class="fa-brands fa-google" style="margin-right:8px;"></i> Continuer avec Google
+    </a>
+    <p class="auth-switch">D&eacute;j&agrave; un compte ? <a href="#" id="switchToSignIn">Se connecter</a></p>
   </div>
-  <a href="{{ url_for('google.login') }}" class="google-btn"><i class="fa-brands fa-google"></i>&nbsp; Continuer avec Google</a>
 </div>
-{% else %}
+{% endif %}
 
 <!-- Header -->
 <div class="header">
@@ -1747,6 +1484,9 @@ transform: translateY(-1px);
 </button>
 <button class="header-btn" id="settingsBtn" title="Param&egrave;tres">
 <i class="fa-solid fa-gear"></i>
+</button>
+<button class="header-btn accent-btn" id="imageGenBtn" title="G&eacute;n&eacute;rer une image (IA)">
+<i class="fa-solid fa-wand-magic-sparkles"></i>
 </button>
 <button class="header-btn accent-btn" id="headerInstallBtn" title="Installer l'application">
 <i class="fa-solid fa-download"></i>
@@ -1823,7 +1563,7 @@ transform: translateY(-1px);
 <i class="fa-solid fa-image"></i>
 <span>Biblioth&egrave;que de photos</span>
 </div>
-<div class="attach-popup-item" id="imageGenBtn" style="color:#8B5CF6;">
+<div class="attach-popup-item" id="imageGenPopupBtn" style="color:#8B5CF6; cursor:pointer;">
 <i class="fa-solid fa-wand-magic-sparkles" style="color:#8B5CF6;"></i>
 <span>G&eacute;n&eacute;rer une image (IA)</span>
 </div>
@@ -1860,17 +1600,41 @@ transform: translateY(-1px);
 <i class="fa-solid fa-wand-magic-sparkles"></i>
 </div>
 <div>
-<h3>G&eacute;n&eacute;rer une image</h3>
-<p>Nano Banana</p>
+<h3>Nafti AI</h3>
+<p>Free SDXL Image Generation &middot; Powered by Gemini AI</p>
 </div>
 </div>
-<textarea class="imggen-textarea" id="imggenPrompt" placeholder="D&eacute;crivez l'image que vous souhaitez g&eacute;n&eacute;rer..."></textarea>
+
+<div style="margin-bottom:14px;">
+<label style="display:block;font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:6px;">Describe what you want to generate:</label>
+<textarea class="imggen-textarea" id="imggenPrompt" placeholder="A beautiful sunset over mountains, oil painting style..."></textarea>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+<div>
+<label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Width: <span id="imggenWidthVal">512</span></label>
+<input type="range" id="imggenWidth" min="256" max="1024" step="64" value="512" style="width:100%;cursor:pointer;margin-top:4px;">
+</div>
+<div>
+<label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Height: <span id="imggenHeightVal">512</span></label>
+<input type="range" id="imggenHeight" min="256" max="1024" step="64" value="512" style="width:100%;cursor:pointer;margin-top:4px;">
+</div>
+<div>
+<label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Steps: <span id="imggenStepsVal">25</span></label>
+<input type="range" id="imggenSteps" min="15" max="50" step="1" value="25" style="width:100%;cursor:pointer;margin-top:4px;">
+</div>
+<div>
+<label style="font-size:12px;font-weight:600;color:var(--text-secondary);">Guidance: <span id="imggenGuidanceVal">7.5</span></label>
+<input type="range" id="imggenGuidance" min="1" max="20" step="0.5" value="7.5" style="width:100%;cursor:pointer;margin-top:4px;">
+</div>
+</div>
+
 <div class="imggen-actions">
 <button class="imggen-cancel-btn" id="imggenCancelBtn">Annuler</button>
 <button class="imggen-generate-btn" id="imggenGenerateBtn">
 <span class="imggen-spinner" id="imggenSpinner"></span>
 <i class="fa-solid fa-sparkles" id="imggenBtnIcon"></i>
-<span id="imggenBtnText">G&eacute;n&eacute;rer</span>
+<span id="imggenBtnText">Generate Image</span>
 </button>
 </div>
 </div>
@@ -1884,7 +1648,6 @@ transform: translateY(-1px);
 </button>
 </div>
 
-{% endif %}
 <script>
   // === Intro Splash Screen ===
   (function() {
@@ -1933,14 +1696,18 @@ transform: translateY(-1px);
 
     // Auth buttons on intro (for non-logged users)
     function showLogin() {
+      var authPage = document.getElementById('authPage');
       var loginSection = document.getElementById('loginSection');
       var registerSection = document.getElementById('registerSection');
+      if (authPage) authPage.style.display = 'flex';
       if (loginSection) loginSection.style.display = '';
       if (registerSection) registerSection.style.display = 'none';
     }
     function showRegister() {
+      var authPage = document.getElementById('authPage');
       var loginSection = document.getElementById('loginSection');
       var registerSection = document.getElementById('registerSection');
+      if (authPage) authPage.style.display = 'flex';
       if (loginSection) loginSection.style.display = 'none';
       if (registerSection) registerSection.style.display = '';
     }
@@ -2596,7 +2363,7 @@ finishGeneration();
 
 window.sendMessage = sendMessage;
 
-// === Image Generation (Nano Banana / Gemini) ===
+// === Image Generation Modal ===
 (function() {
 var imggenModalOverlay = document.getElementById('imggenModalOverlay');
 var imggenPrompt = document.getElementById('imggenPrompt');
@@ -2605,20 +2372,39 @@ var imggenCancelBtn = document.getElementById('imggenCancelBtn');
 var imggenSpinner = document.getElementById('imggenSpinner');
 var imggenBtnIcon = document.getElementById('imggenBtnIcon');
 var imggenBtnText = document.getElementById('imggenBtnText');
-var imageGenBtn = document.getElementById('imageGenBtn');
 var attachPopup = document.getElementById('attachPopup');
 var fullscreenImgOverlay = document.getElementById('fullscreenImgOverlay');
 var fullscreenImg = document.getElementById('fullscreenImg');
 var fullscreenDownloadBtn = document.getElementById('fullscreenDownloadBtn');
 var currentFullscreenSrc = '';
 
-if (imageGenBtn) {
-imageGenBtn.addEventListener('click', function() {
-if (attachPopup) attachPopup.classList.remove('active');
-if (imggenModalOverlay) imggenModalOverlay.classList.add('active');
-if (imggenPrompt) { imggenPrompt.value = ''; imggenPrompt.focus(); }
-});
+function openImggenModal() {
+    if (attachPopup) attachPopup.classList.remove('active');
+    if (imggenPrompt) imggenPrompt.value = '';
+    if (imggenModalOverlay) imggenModalOverlay.classList.add('active');
+    setTimeout(function() { if (imggenPrompt) imggenPrompt.focus(); }, 100);
 }
+
+// Slider listeners
+var sliders = [
+    ['imggenWidth', 'imggenWidthVal'],
+    ['imggenHeight', 'imggenHeightVal'],
+    ['imggenSteps', 'imggenStepsVal'],
+    ['imggenGuidance', 'imggenGuidanceVal']
+];
+sliders.forEach(function(pair) {
+    var el = document.getElementById(pair[0]);
+    var val = document.getElementById(pair[1]);
+    if (el && val) el.addEventListener('input', function() { val.textContent = el.value; });
+});
+
+// Header button
+var headerImgGenBtn = document.getElementById('imageGenBtn');
+if (headerImgGenBtn) headerImgGenBtn.addEventListener('click', openImggenModal);
+
+// Popup button
+var popupImgGenBtn = document.getElementById('imageGenPopupBtn');
+if (popupImgGenBtn) popupImgGenBtn.addEventListener('click', openImggenModal);
 
 if (imggenCancelBtn) {
 imggenCancelBtn.addEventListener('click', function() {

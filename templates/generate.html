@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nafti AI - Génération d'image</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+:root {
+    --bg-primary: #F5F5F7;
+    --bg-chat: #FFFFFF;
+    --text-primary: #1D1D1F;
+    --text-secondary: #6E6E73;
+    --text-muted: #AEAEB2;
+    --accent: #0A8F94;
+    --accent-light: #0FC2C8;
+    --accent-glow: rgba(10,143,148,0.12);
+    --gold: #C79B3B;
+    --border: rgba(0,0,0,0.06);
+    --shadow: 0 4px 24px rgba(0,0,0,0.06);
+    --shadow-lg: 0 12px 48px rgba(0,0,0,0.1);
+    --input-bg: #FFFFFF;
+    --input-border: rgba(0,0,0,0.08);
+    --error-bg: #FEF2F2;
+    --error-text: #DC2626;
+    --glass: rgba(255,255,255,0.72);
+    --radius-sm: 12px;
+    --radius-md: 16px;
+    --radius-lg: 24px;
+    --radius-xl: 28px;
+}
+
+html.dark {
+    --bg-primary: #0C0C0E;
+    --bg-chat: #18181B;
+    --text-primary: #F4F4F5;
+    --text-secondary: #A1A1AA;
+    --text-muted: #52525B;
+    --accent: #22D3EE;
+    --accent-light: #67E8F9;
+    --accent-glow: rgba(34,211,238,0.1);
+    --gold: #F59E0B;
+    --border: rgba(255,255,255,0.06);
+    --shadow: 0 4px 24px rgba(0,0,0,0.25);
+    --shadow-lg: 0 12px 48px rgba(0,0,0,0.4);
+    --input-bg: #1E1E23;
+    --input-border: rgba(255,255,255,0.06);
+    --error-bg: rgba(220,38,38,0.1);
+    --error-text: #F87171;
+    --glass: rgba(28,28,32,0.8);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(ellipse 60% 50% at 10% 20%, var(--accent-glow) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 90% 80%, rgba(199,155,59,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Header */
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--glass);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+}
+
+.logo-container {
+    width: 42px; height: 42px;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(135deg, #8B5CF6, #EC4899);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 14px rgba(139,92,246,0.3);
+}
+.logo-container i { font-size: 18px; color: #FFF; }
+
+.header-info { flex: 1; }
+.header-info h1 {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    background: linear-gradient(135deg, #8B5CF6, #EC4899);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.2;
+}
+.header-info p {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-top: 1px;
+}
+
+.back-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border);
+    background: var(--bg-chat);
+    color: var(--text-secondary);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all .2s ease;
+    flex-shrink: 0;
+}
+.back-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+}
+
+/* Main content */
+.main {
+    position: relative;
+    z-index: 1;
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 28px 16px 40px;
+}
+
+.page-title {
+    text-align: center;
+    margin-bottom: 28px;
+}
+.page-title h2 {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    margin-bottom: 6px;
+}
+.page-title p {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+/* Card */
+.card {
+    background: var(--bg-chat);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 24px 20px;
+    margin-bottom: 20px;
+}
+
+.form-group { margin-bottom: 18px; }
+
+.form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    letter-spacing: 0.2px;
+}
+
+.prompt-textarea {
+    width: 100%;
+    min-height: 100px;
+    max-height: 200px;
+    padding: 12px 14px;
+    border: 2px solid var(--input-border);
+    border-radius: var(--radius-md);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+    transition: border-color .2s ease;
+}
+.prompt-textarea:focus { border-color: #8B5CF6; }
+.prompt-textarea::placeholder { color: var(--text-muted); }
+
+.generate-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: var(--radius-md);
+    border: none;
+    background: linear-gradient(135deg, #8B5CF6, #EC4899);
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all .2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 4px 16px rgba(139,92,246,0.25);
+}
+.generate-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(139,92,246,0.35);
+}
+.generate-btn:active:not(:disabled) { transform: scale(.97); }
+.generate-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.spinner {
+    width: 18px; height: 18px;
+    border: 2.5px solid rgba(255,255,255,.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Error */
+.error-box {
+    display: none;
+    background: var(--error-bg);
+    color: var(--error-text);
+    border: 1px solid var(--error-text);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-top: 14px;
+}
+.error-box.active { display: block; }
+
+/* Result */
+.result-card {
+    display: none;
+    background: var(--bg-chat);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 20px;
+    text-align: center;
+    animation: fadeUp .4s cubic-bezier(.22,1,.36,1);
+}
+.result-card.active { display: block; }
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.result-card img {
+    max-width: 100%;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    display: block;
+    margin: 0 auto 16px;
+}
+
+.result-text {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.55;
+    margin-bottom: 16px;
+    text-align: left;
+}
+
+.download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: var(--radius-md);
+    border: none;
+    background: linear-gradient(135deg, var(--accent), var(--gold));
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: transform .2s;
+    text-decoration: none;
+}
+.download-btn:hover { transform: scale(1.04); }
+
+/* Loader overlay */
+.loader-box {
+    display: none;
+    text-align: center;
+    padding: 32px 20px;
+}
+.loader-box.active { display: block; }
+
+.loader-spinner {
+    width: 44px; height: 44px;
+    border: 4px solid var(--border);
+    border-top-color: #8B5CF6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 14px;
+}
+
+.loader-box p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+    </style>
+</head>
+<body>
+<div class="header">
+    <div class="logo-container">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+    </div>
+    <div class="header-info">
+        <h1>Génération d'image</h1>
+        <p>Propulsé par Gemini AI</p>
+    </div>
+    <a href="/" class="back-btn">
+        <i class="fa-solid fa-arrow-left"></i>
+        Retour au chat
+    </a>
+</div>
+
+<div class="main">
+    <div class="page-title">
+        <h2>Créez une image avec l'IA</h2>
+        <p>Décrivez ce que vous souhaitez générer en détail</p>
+    </div>
+
+    <div class="card">
+        <div class="form-group">
+            <label class="form-label" for="prompt">Description de l'image</label>
+            <textarea class="prompt-textarea" id="prompt" placeholder="Ex: Un coucher de soleil sur les montagnes, style peinture à l'huile, couleurs chaudes..."></textarea>
+        </div>
+
+        <button class="generate-btn" id="generateBtn" onclick="generate()">
+            <span class="spinner" id="spinner"></span>
+            <i class="fa-solid fa-sparkles" id="btnIcon"></i>
+            <span id="btnText">Générer l'image</span>
+        </button>
+
+        <div class="error-box" id="errorBox"></div>
+    </div>
+
+    <div class="loader-box" id="loaderBox">
+        <div class="loader-spinner"></div>
+        <p>Génération en cours, veuillez patienter...</p>
+    </div>
+
+    <div class="result-card" id="resultCard">
+        <img id="resultImage" src="" alt="Image générée">
+        <div class="result-text" id="resultText"></div>
+        <a class="download-btn" id="downloadBtn" href="#" download="nafti-image.png">
+            <i class="fa-solid fa-download"></i> Télécharger
+        </a>
+    </div>
+</div>
+
+<script>
+// Theme sync with main app
+(function() {
+    try {
+        var saved = localStorage.getItem('nafti-theme');
+        if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+    } catch(e) {}
+})();
+
+async function generate() {
+    const prompt = document.getElementById('prompt').value.trim();
+    const errorBox = document.getElementById('errorBox');
+    const loaderBox = document.getElementById('loaderBox');
+    const resultCard = document.getElementById('resultCard');
+    const btn = document.getElementById('generateBtn');
+    const spinner = document.getElementById('spinner');
+    const btnIcon = document.getElementById('btnIcon');
+    const btnText = document.getElementById('btnText');
+
+    if (!prompt) {
+        errorBox.textContent = 'Veuillez entrer une description.';
+        errorBox.classList.add('active');
+        return;
+    }
+
+    errorBox.classList.remove('active');
+    resultCard.classList.remove('active');
+    loaderBox.classList.add('active');
+    btn.disabled = true;
+    spinner.style.display = 'block';
+    btnIcon.style.display = 'none';
+    btnText.textContent = 'Génération...';
+
+    try {
+        const response = await fetch('/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Erreur lors de la génération');
+        }
+
+        const imgSrc = `data:${data.mime_type || 'image/png'};base64,${data.image_base64}`;
+        document.getElementById('resultImage').src = imgSrc;
+
+        const resultText = document.getElementById('resultText');
+        if (data.text) {
+            resultText.textContent = data.text;
+            resultText.style.display = 'block';
+        } else {
+            resultText.style.display = 'none';
+        }
+
+        // Setup download
+        const downloadBtn = document.getElementById('downloadBtn');
+        downloadBtn.href = imgSrc;
+
+        loaderBox.classList.remove('active');
+        resultCard.classList.add('active');
+    } catch (err) {
+        errorBox.textContent = 'Erreur : ' + err.message;
+        errorBox.classList.add('active');
+        loaderBox.classList.remove('active');
+    } finally {
+        btn.disabled = false;
+        spinner.style.display = 'none';
+        btnIcon.style.display = '';
+        btnText.textContent = 'Générer l\'image';
+    }
+}
+
+document.getElementById('prompt').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.ctrlKey) generate();
+});
+</script>
+</body>
+</html>

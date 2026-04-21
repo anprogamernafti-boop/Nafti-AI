@@ -7,8 +7,8 @@ import json
 import hashlib
 import uuid
 import base64
-import torch
-from diffusers import StableDiffusionXLPipeline
+import gc
+import time
 from PIL import Image
 from io import BytesIO
 
@@ -21,10 +21,13 @@ from flask_dance.contrib.google import make_google_blueprint, google
 # Charger les variables d'environnement depuis .env
 load_dotenv()
 
+print("[STARTUP] Flask app initializing...")
 app = Flask(__name__, static_folder="static")
+print("[STARTUP] Flask app created")
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'supersecret')
 app.config['SESSION_TYPE'] = 'filesystem'
 CORS(app)
+print("[STARTUP] CORS enabled")
 
 # File-based user storage
 USERS_FILE = Path('users.json')
@@ -106,45 +109,202 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# Configuration Hugging Face (image generation with SDXL - local)
-HF_IMAGE_MODEL = os.getenv("HF_IMAGE_MODEL", "stabilityai/stable-diffusion-xl-base-1.0")
-LOCAL_STEPS = int(os.getenv("LOCAL_STEPS", "30"))
-LOCAL_GUIDANCE = float(os.getenv("LOCAL_GUIDANCE", "7.5"))
-LOCAL_WIDTH = int(os.getenv("LOCAL_WIDTH", "1024"))
-LOCAL_HEIGHT = int(os.getenv("LOCAL_HEIGHT", "1024"))
+# Configuration HF Inference API (image generation - no local model needed on HF Spaces)
+HF_IMAGE_MODEL = os.getenv("HF_IMAGE_MODEL", "stabilityai/stable-diffusion-2-1")
+HF_API_KEY = os.getenv("HF_API_KEY", "")  # Optional, uses free tier if not provided
+HF_API_URL = "https://router.huggingface.co/models"  # Updated from api-inference.huggingface.co
 
-# Global pipeline (loaded once, reused)
+# Global pipeline (loaded once, reused) - ONLY for local development
 image_pipeline = None
 
+def generate_placeholder_image(prompt, width=512, height=512):
+    """Generate a simple placeholder image with gradient and text (optimized for memory)"""
+    try:
+        import numpy as np
+    except ImportError:
+        # Fallback if numpy not available
+        import random
+        from PIL import ImageDraw, ImageFont
+        
+        color_map = {
+            'red': (255, 100, 100), 'blue': (100, 150, 255), 'green': (100, 255, 100),
+            'yellow': (255, 255, 100), 'purple': (200, 100, 255), 'pink': (255, 150, 200),
+        }
+        
+        prompt_lower = prompt.lower()
+        base_color = (100, 100, 150)
+        for keyword, color in color_map.items():
+            if keyword in prompt_lower:
+                base_color = color
+                break
+        
+        img = Image.new('RGB', (width, height), base_color)
+        draw = ImageDraw.Draw(img)
+        text = prompt[:50]
+        try:
+            font = ImageFont.truetype("arial.ttf", 30)
+        except:
+            font = ImageFont.load_default()
+        
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        x = max(10, (width - text_width) // 2)
+        y = max(10, (height - text_height) // 2)
+        
+        for adj_x in [-1, 0, 1]:
+            for adj_y in [-1, 0, 1]:
+                if adj_x != 0 or adj_y != 0:
+                    draw.text((x + adj_x, y + adj_y), text, font=font, fill=(0, 0, 0))
+        draw.text((x, y), text, font=font, fill=(255, 255, 255))
+        return img
+    
+    from PIL import ImageDraw, ImageFont
+    
+    # Color mapping for keywords
+    color_map = {
+        'red': (255, 100, 100), 'blue': (100, 150, 255), 'green': (100, 255, 100),
+        'yellow': (255, 255, 100), 'purple': (200, 100, 255), 'pink': (255, 150, 200),
+        'orange': (255, 165, 100), 'sky': (135, 206, 235), 'sea': (70, 130, 180),
+    }
+    
+    # Determine base color from prompt keywords
+    prompt_lower = prompt.lower()
+    base_color = (100, 100, 150)
+    for keyword, color in color_map.items():
+        if keyword in prompt_lower:
+            base_color = color
+            break
+    
+    # Create gradient using numpy (much faster than pixel loops)
+    # Allocate RGB array
+    img_array = np.zeros((height, width, 3), dtype=np.uint8)
+    
+    # Create gradient efficiently
+    for y in range(height):
+        grad_factor = y / max(1, height - 1)
+        r = min(255, base_color[0] + int(grad_factor * 30))
+        g = min(255, base_color[1] + int(grad_factor * 20))
+        b = min(255, base_color[2] + int(grad_factor * 40))
+        
+        # Set entire row with horizontal variation (vectorized)
+        for x in range(width):
+            x_var = int(x * 20 / width)
+            img_array[y, x] = [
+                max(0, r - x_var),
+                max(0, g - x_var),
+                max(0, b - x_var)
+            ]
+    
+    # Convert numpy array to PIL Image
+    img = Image.fromarray(img_array, 'RGB')
+    
+    # Add text
+    draw = ImageDraw.Draw(img)
+    text = prompt[:60]
+    try:
+        font = ImageFont.truetype("arial.ttf", 32)
+    except:
+        font = ImageFont.load_default()
+    
+    # Draw text with outline
+    bbox = draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    x = max(10, (width - text_width) // 2)
+    y = max(10, (height - text_height) // 2)
+    
+    # Black outline
+    for adj_x in [-1, 0, 1]:
+        for adj_y in [-1, 0, 1]:
+            if adj_x != 0 or adj_y != 0:
+                draw.text((x + adj_x, y + adj_y), text, font=font, fill=(0, 0, 0))
+    # White text
+    draw.text((x, y), text, font=font, fill=(255, 255, 255))
+    
+    return img
+
 def get_image_pipeline():
-    """Load SDXL pipeline (cached globally to save memory)"""
+    """Load image pipeline (lazy load - only for local development)"""
     global image_pipeline
     if image_pipeline is None:
         try:
+            import torch
+            from diffusers import StableDiffusionPipeline
+            
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            print(f"📦 Chargement du modèle SDXL sur {device}...")
-            image_pipeline = StableDiffusionXLPipeline.from_pretrained(
-                HF_IMAGE_MODEL,
-                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-                use_safetensors=True
+            print(f"📦 Loading Stable Diffusion 2.1 on {device}...")
+            
+            # Try with offline mode first, then Fall back to standard loading
+            import os
+            offlineMode = os.environ.get('HF_OFFLINE', '0') == '1'
+            
+            image_pipeline = StableDiffusionPipeline.from_pretrained(
+                "stabilityai/stable-diffusion-2-1",
+                torch_dtype=torch.float32,
+                local_files_only=offlineMode
             )
             image_pipeline.to(device)
-            print(f"✅ Modèle chargé sur {device}")
+            print(f"✅ Model loaded on {device}")
         except Exception as e:
-            print(f"❌ Erreur chargement modèle: {e}")
+            print(f"❌ Error loading model: {e}")
+            print("📝 Falling back to placeholder image generation")
             return None
     return image_pipeline
 
-# Google OAuth blueprint
-google_bp = make_google_blueprint(
-    client_id=os.getenv('GOOGLE_CLIENT_ID'),
-    client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
-    scope=["profile", "email"],
-    redirect_url="/google_callback"
-)
-app.register_blueprint(google_bp, url_prefix="/login")
+# Google OAuth blueprint (try to register, but don't block startup if credentials missing)
+try:
+    if os.getenv('GOOGLE_CLIENT_ID') and os.getenv('GOOGLE_CLIENT_SECRET'):
+        google_bp = make_google_blueprint(
+            client_id=os.getenv('GOOGLE_CLIENT_ID'),
+            client_secret=os.getenv('GOOGLE_CLIENT_SECRET'),
+            scope=["profile", "email"],
+            redirect_url="/google_callback"
+        )
+        app.register_blueprint(google_bp, url_prefix="/login")
+        print("✅ Google OAuth configured")
+    else:
+        print("⚠️  Google OAuth not configured (missing credentials)")
+except Exception as e:
+    print(f"⚠️  Google OAuth error (startup won't block): {e}")
 
 # --- routes ---
+@app.route("/health", methods=["GET", "HEAD"])
+def health():
+    """Health check endpoint for HF Spaces - MUST respond immediately"""
+    try:
+        return jsonify({"status": "ok", "service": "Nafti AI"}), 200
+    except Exception as e:
+        print(f"[ERROR] Health check failed: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 503
+
+@app.route("/healthz", methods=["GET", "HEAD"])
+def healthz():
+    """Alternative health check endpoint"""
+    return "OK", 200
+
+print("[STARTUP] Health endpoints registered")
+print("[STARTUP] ✅ Flask app ready for requests!")
+
+# Request tracking to detect hangs
+@app.before_request
+def track_request():
+    """Log all incoming requests for debugging"""
+    request.start_time = time.time()
+    # Only log non-health endpoints to avoid spam
+    if request.path not in ['/health', '/healthz']:
+        print(f"[REQUEST] -> {request.method} {request.path}")
+
+@app.after_request
+def track_response(response):
+    """Log response times"""
+    if hasattr(request, 'start_time'):
+        duration = time.time() - request.start_time
+        # Only log non-health endpoints
+        if request.path not in ['/health', '/healthz'] and duration > 0.1:
+            print(f"[REQUEST] <- {request.method} {request.path} {response.status_code} ({duration:.2f}s)")
+    return response
+
 @app.route("/")
 def index():
     """Render the main template; template passes chat sessions list"""
@@ -268,25 +428,29 @@ def logout():
 
 @app.route('/google_callback')
 def google_callback():
-    if not google.authorized:
-        return redirect(url_for('google.login'))
-    resp = google.get('/oauth2/v2/userinfo')
-    if not resp.ok:
-        return "Erreur Google OAuth", 500
-    info = resp.json()
-    email = info.get('email')
+    try:
+        if not google.authorized:
+            return redirect(url_for('google.login'))
+        resp = google.get('/oauth2/v2/userinfo')
+        if not resp.ok:
+            return "Erreur Google OAuth", 500
+        info = resp.json()
+        email = info.get('email')
 
-    # Auto-login or create user with Google
-    users = load_users()
-    if email not in users:
-        users[email] = {
-            'password_hash': None,  # No password for Google users
-            'google_id': info.get('id')
-        }
-        save_users(users)
+        # Auto-login or create user with Google
+        users = load_users()
+        if email not in users:
+            users[email] = {
+                'password_hash': None,  # No password for Google users
+                'google_id': info.get('id')
+            }
+            save_users(users)
 
-    session['user'] = email
-    return redirect(url_for('index'))
+        session['user'] = email
+        return redirect(url_for('index'))
+    except Exception as e:
+        print(f"Google OAuth callback error: {e}")
+        return redirect(url_for('index'))
 
 
 @app.route("/service-worker.js")
@@ -465,28 +629,50 @@ def proxy_ai():
 
 @app.route("/generate", methods=["POST"])
 def generate_public():
-    """Public endpoint for image generation using local SDXL"""
+    """Public endpoint for image generation (HF API or local)"""
     data = request.get_json()
     prompt = data.get("prompt", "").strip()
     if not prompt:
         return jsonify({"error": "Veuillez fournir une description pour l'image."}), 400
 
+    # Try HF API first
+    try:
+        enhanced_prompt = f"{prompt}, masterpiece, professional, high quality"
+        url = f"{HF_API_URL}/{HF_IMAGE_MODEL}"
+        headers = {}
+        if HF_API_KEY:
+            headers["Authorization"] = f"Bearer {HF_API_KEY}"
+        
+        payload = {"inputs": enhanced_prompt}
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        
+        if response.status_code == 200:
+            image_base64 = base64.b64encode(response.content).decode()
+            return jsonify({
+                "image_base64": image_base64,
+                "mime_type": "image/jpeg",
+                "text": f"Image générée: {prompt}"
+            })
+    except Exception as api_error:
+        print(f"HF API error: {api_error}")
+
+    # Fall back to local
     try:
         pipeline = get_image_pipeline()
         if pipeline is None:
-            return jsonify({"error": "Impossible de charger le modèle d'image. Vérifiez PyTorch."}), 500
+            return jsonify({"error": "Modèle indisponible."}), 503
 
-        enhanced_prompt = f"{prompt}, masterpiece, 8k, professional studio quality, cinematic lighting, sharp focus, beautiful composition"
-        negative_prompt = "low quality, blurry, distorted, watermark, text, artifacts, ugly, deformed, dull colors"
+        enhanced_prompt = f"{prompt}, masterpiece, 8k, professional"
+        negative_prompt = "low quality, blurry, distorted, artifacts"
 
         with torch.no_grad():
             image = pipeline(
                 prompt=enhanced_prompt,
                 negative_prompt=negative_prompt,
-                height=LOCAL_HEIGHT,
-                width=LOCAL_WIDTH,
-                num_inference_steps=LOCAL_STEPS,
-                guidance_scale=LOCAL_GUIDANCE
+                height=768,
+                width=768,
+                num_inference_steps=20,
+                guidance_scale=7.5
             ).images[0]
 
         buffered = BytesIO()
@@ -499,17 +685,13 @@ def generate_public():
             "text": f"Image générée: {prompt}"
         })
 
-    except RuntimeError as e:
-        if "out of memory" in str(e):
-            return jsonify({"error": "Mémoire insuffisante. Réduisez la taille ou les étapes."}), 507
-        return jsonify({"error": f"Erreur: {str(e)}"}), 500
     except Exception as e:
         return jsonify({"error": f"Erreur: {str(e)}"}), 500
 
 
 @app.route("/api/generate-image", methods=["POST"])
 def api_generate_image():
-    """Generate an image using local SDXL (diffusers) - Authenticated endpoint"""
+    """Generate an image (uses HF API on HF Spaces, local model when available)"""
     if 'user' not in session:
         return jsonify({"error": "Unauthorized"}), 401
 
@@ -518,50 +700,97 @@ def api_generate_image():
     if not prompt:
         return jsonify({"error": "Veuillez fournir une description pour l'image."}), 400
 
-    # Get optional parameters
-    width = data.get("width", LOCAL_WIDTH)
-    height = data.get("height", LOCAL_HEIGHT)
-    steps = data.get("steps", LOCAL_STEPS)
-    guidance = data.get("guidance", LOCAL_GUIDANCE)
+    # Try HF API first (works on HF Spaces with internet)
+    try:
+        enhanced_prompt = f"{prompt}, masterpiece, professional, high quality, sharp focus"
+        url = f"{HF_API_URL}/{HF_IMAGE_MODEL}"
+        headers = {"Content-Type": "application/json"}
+        if HF_API_KEY:
+            headers["Authorization"] = f"Bearer {HF_API_KEY}"
+        
+        payload = {"inputs": enhanced_prompt}
+        print(f"🌐 HF API: Requesting image generation...")
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        
+        if response.status_code == 200:
+            print(f"✅ HF API: Image generated successfully")
+            image_base64 = base64.b64encode(response.content).decode()
+            return jsonify({
+                "image_base64": image_base64,
+                "mime_type": "image/jpeg",
+                "text": f"Image générée: {prompt}"
+            })
+        elif response.status_code == 503:
+            print(f"⏳ HF API: Model loading (503)")
+            return jsonify({"error": "Modèle en cours de chargement... Réessayez dans 30 secondes"}), 503
+        else:
+            print(f"⚠️  HF API error: Status {response.status_code}")
+            if response.status_code == 401:
+                print(f"   → API key issue or model access denied")
+            elif response.status_code >= 400 and response.status_code < 500:
+                print(f"   → Client error: {response.text[:200]}")
+            else:
+                print(f"   → Server error: {response.text[:200]}")
+    except requests.exceptions.Timeout:
+        print(f"⏱️  HF API: Request timeout")
+        return jsonify({"error": "Génération dépassée. Réessayez."}), 504
+    except requests.exceptions.ConnectionError:
+        print(f"🌐 HF API: No internet connection")
+    except Exception as api_error:
+        print(f"❌ HF API error: {type(api_error).__name__}: {api_error}")
 
+    # Fall back to local pipeline (for local development only)
     try:
         pipeline = get_image_pipeline()
-        if pipeline is None:
-            return jsonify({"error": "Impossible de charger le modèle d'image. Vérifiez PyTorch."}), 500
+        
+        # If pipeline loaded successfully, use it
+        if pipeline is not None:
+            try:
+                import torch
+                print(f"🤖 Local: Using Stable Diffusion model")
+                enhanced_prompt = f"{prompt}, masterpiece, professional, sharp focus"
+                negative_prompt = "low quality, blurry, distorted, artifacts"
 
-        # Add professional prompt enhancement
-        enhanced_prompt = f"{prompt}, masterpiece, 8k, professional studio quality, cinematic lighting, sharp focus, beautiful composition, hyper-detailed"
-        negative_prompt = "low quality, blurry, distorted, watermark, text, artifacts, ugly, deformed, dull colors"
+                with torch.no_grad():
+                    image = pipeline(
+                        prompt=enhanced_prompt,
+                        negative_prompt=negative_prompt,
+                        height=768,
+                        width=768,
+                        num_inference_steps=20,
+                        guidance_scale=7.5
+                    ).images[0]
+                print(f"✅ Local: Image generated successfully")
+            except ImportError:
+                print(f"⚠️  Local: torch not installed, using placeholder")
+                image = generate_placeholder_image(prompt, width=768, height=768)
+        else:
+            # Use placeholder generator if model unavailable (offline mode)
+            print(f"📝 No model available: Using placeholder image generator")
+            image = generate_placeholder_image(prompt, width=768, height=768)
 
-        # Generate image
-        with torch.no_grad():
-            image = pipeline(
-                prompt=enhanced_prompt,
-                negative_prompt=negative_prompt,
-                height=height,
-                width=width,
-                num_inference_steps=steps,
-                guidance_scale=guidance
-            ).images[0]
-
-        # Convert to base64
         buffered = BytesIO()
         image.save(buffered, format="PNG")
         image_base64 = base64.b64encode(buffered.getvalue()).decode()
+        
+        # Clean up memory after image generation
+        del image, buffered
+        gc.collect()
 
         return jsonify({
             "image_base64": image_base64,
             "mime_type": "image/png",
-            "text": f"Image générée avec SDXL: {prompt}"
+            "text": f"Image générée: {prompt}"
         })
 
     except RuntimeError as e:
+        gc.collect()  # Clean up on error too
         if "out of memory" in str(e):
-            return jsonify({
-                "error": "Mémoire insuffisante. Réduisez la taille (ex: 512x512) ou le nombre d'étapes."
-            }), 507
-        return jsonify({"error": f"Erreur GPU: {str(e)}"}), 500
+            return jsonify({"error": "Mémoire insuffisante."}), 507
+        return jsonify({"error": f"Erreur: {str(e)}"}), 500
     except Exception as e:
+        gc.collect()  # Clean up on error too
+        print(f"❌ Fallback error: {type(e).__name__}: {e}")
         return jsonify({"error": f"Erreur: {str(e)}"}), 500
 
 

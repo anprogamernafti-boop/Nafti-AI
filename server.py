@@ -9,8 +9,10 @@ import uuid
 import base64
 import gc
 import time
+import re
 from PIL import Image
 from io import BytesIO
+from langdetect import detect, LangDetectException
 
 # Autoriser OAuth en HTTP pour le développement local
 os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT', '1')
@@ -102,6 +104,119 @@ def hash_password(password):
 def verify_password(password, password_hash):
     """Verify password against hash"""
     return hash_password(password) == password_hash
+
+def detect_language(text):
+    """Detect language using langdetect library"""
+    if not text or not text.strip():
+        return "en"
+    
+    try:
+        lang_code = detect(text.strip())
+        return lang_code
+    except LangDetectException:
+        # If detection fails, default to English
+        return "en"
+
+def detect_tunisian_dialect(text):
+    """Detect if the user specifically requests Tunisian dialect in Arabic or French."""
+    if not text:
+        return None
+
+    lower_text = text.lower()
+    arabic_script = bool(re.search(r"[\u0600-\u06FF]", text))
+
+    dialect_terms = [
+        "dialecte tunisien",
+        "arabe tunisien",
+        "tunisien",
+        "tunisie",
+        "tounsi",
+        "darija",
+        "darja",
+        "derja",
+    ]
+
+    french_tunisian_terms = [
+        "tawa", "briki", "barcha", "mouch", "chwaya", "ya3ni", "kifech",
+        "chnowa", "chna", "sahha", "beldi", "hakka", "nchallah", "ma nhebch",
+        "ma nhebich", "tawa", "hakka", "kif ken", "fik", "slama", "barsha"
+    ]
+
+    arabic_tunisian_terms = [
+        "عسلامة", "شنية", "برشة", "موش", "شكون", "حاجة", "ما نعرفش",
+        "توا", "بالحق", "يزي", "بربي", "صحيت", "عاوني", "شيم", "بالحق"
+    ]
+
+    if arabic_script:
+        if any(term in lower_text for term in arabic_tunisian_terms) or any(term in lower_text for term in dialect_terms):
+            return "ar"
+    else:
+        if any(term in lower_text for term in french_tunisian_terms) or any(term in lower_text for term in dialect_terms):
+            return "fr"
+
+    return None
+
+
+def get_language_instruction(lang_code, prompt_text=None):
+    """Get the appropriate language instruction for the detected language"""
+    tunisian_dialect = detect_tunisian_dialect(prompt_text)
+    if tunisian_dialect == "ar":
+        return "Répondez en arabe tunisien (derja)."
+    if tunisian_dialect == "fr":
+        return "Répondez en français tunisien (derja)."
+
+    instructions = {
+        "fr": "Répondez en français.",
+        "en": "Respond in English.",
+        "es": "Responde en español.",
+        "de": "Antworte auf Deutsch.",
+        "it": "Rispondi in italiano.",
+        "pt": "Responda em português.",
+        "ru": "Отвечайте на русском языке.",
+        "ja": "日本語で答えてください。",
+        "ko": "한국어로 답변해 주세요.",
+        "zh": "请用中文回答。",
+        "zh-cn": "请用中文回答。",
+        "zh-tw": "請用中文回答。",
+        "ar": "أجب باللغة العربية.",
+        "hi": "हिंदी में जवाब दें।",
+        "nl": "Reageer in het Nederlands.",
+        "sv": "Svara på svenska.",
+        "da": "Svar på dansk.",
+        "no": "Svar på norsk.",
+        "fi": "Vasta suomeksi.",
+        "pl": "Odpowiedz po polsku.",
+        "tr": "Türkçe cevap verin.",
+        "he": "ענה בעברית.",
+        "th": "ตอบเป็นภาษาไทย.",
+        "vi": "Trả lời bằng tiếng Việt.",
+        "cs": "Odpovězte česky.",
+        "hu": "Válaszoljon magyarul.",
+        "ro": "Răspundeți în română.",
+        "sk": "Odpovedzte po slovensky.",
+        "sl": "Odgovorite v slovenščini.",
+        "hr": "Odgovorite na hrvatskom.",
+        "bg": "Отговорете на български.",
+        "uk": "Відповідайте українською.",
+        "el": "Απαντήστε στα ελληνικά.",
+        "et": "Vasta eesti keeles.",
+        "lv": "Atbildiet latviešu valodā.",
+        "lt": "Atsakykite lietuviškai.",
+        "mt": "Wieġeb bil-Malti.",
+        "ga": "Freagair as Gaeilge.",
+        "cy": "Atebwch yn Gymraeg.",
+        "is": "Svaraðu á íslensku.",
+        "fo": "Svara á føroyskum.",
+        "kl": "Apeqqut kalaallisut.",
+        "sq": "Përgjigju në shqip.",
+        "mk": "Одговорете на македонски.",
+        "sr": "Одговорите на српском.",
+        "bs": "Odgovorite na bosanskom.",
+        "me": "Odgovorite na crnogorskom.",
+        "sh": "Odgovorite na srpskohrvatskom.",
+    }
+    
+    return instructions.get(lang_code, "Respond in English.")
 
 # Configuration Groq (lue depuis .env)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -362,7 +477,7 @@ def settings_view():
 def clear_all_sessions():
     user = session.get('user')
     if not user:
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"error": "Login to use AI features"}), 401
     histories = load_history()
     histories[user] = []
     save_history(histories)
@@ -379,7 +494,7 @@ def history_view():
 def new_session():
     user = session.get('user')
     if not user:
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"error": "Login to use AI features"}), 401
     sess = create_session_for_user(user)
     return jsonify(sess)
 
@@ -387,7 +502,7 @@ def new_session():
 def clear_session():
     user = session.get('user')
     if not user:
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"error": "Login to use AI features"}), 401
     data = request.get_json() or {}
     sid = data.get('session_id')
     if not sid:
@@ -408,7 +523,7 @@ def clear_session():
 def delete_session_route():
     user = session.get('user')
     if not user:
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"error": "Login to use AI features"}), 401
     data = request.get_json() or {}
     sid = data.get('session_id')
     if not sid:
@@ -512,7 +627,7 @@ def chat_public():
 def proxy_ai():
     """Proxy that relays requests to Groq API - stores conversation history per user"""
     if 'user' not in session:
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"error": "Login to use AI features"}), 401
     if not GROQ_API_KEY:
         return jsonify({"error": "Clé API Groq manquante. Vérifiez votre fichier .env"}), 500
 
@@ -562,6 +677,38 @@ def proxy_ai():
     # If images are provided, use the vision model and format the last user message
     use_model = GROQ_MODEL
     api_messages = list(messages)
+    
+    # Detect language from the last user message
+    detected_lang = "en"  # default
+    prompt_text = None
+    for msg in reversed(api_messages):
+        if msg.get('role') == 'user':
+            if isinstance(msg.get('content'), str):
+                prompt_text = msg['content']
+                detected_lang = detect_language(prompt_text)
+            elif isinstance(msg.get('content'), list):
+                # For multimodal messages, check text parts
+                for part in msg['content']:
+                    if part.get('type') == 'text':
+                        prompt_text = part.get('text', '')
+                        detected_lang = detect_language(prompt_text)
+                        break
+            break
+    
+    # Add language instruction to system message or create one
+    lang_instruction = get_language_instruction(detected_lang, prompt_text)
+    
+    # Check if there's already a system message
+    has_system = any(msg.get('role') == 'system' for msg in api_messages)
+    if not has_system:
+        api_messages.insert(0, {"role": "system", "content": lang_instruction})
+    else:
+        # Update existing system message
+        for msg in api_messages:
+            if msg.get('role') == 'system':
+                msg['content'] = f"{msg['content']} {lang_instruction}"
+                break
+    
     if images_data:
         use_model = GROQ_VISION_MODEL
         # Find the last user message and convert to multimodal format
@@ -693,7 +840,7 @@ def generate_public():
 def api_generate_image():
     """Generate an image (uses HF API on HF Spaces, local model when available)"""
     if 'user' not in session:
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"error": "Login to use AI features"}), 401
 
     data = request.get_json()
     prompt = data.get("prompt", "").strip()
@@ -798,7 +945,7 @@ def api_generate_image():
 def get_session_data(session_id):
     user = session.get('user')
     if not user:
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"error": "Login to use AI features"}), 401
     sess = find_session(user, session_id)
     if not sess:
         return jsonify({"error": "Not found"}), 404

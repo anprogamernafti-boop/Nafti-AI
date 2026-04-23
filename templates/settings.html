@@ -275,6 +275,135 @@ font-size: 11px;
 color: var(--text-muted);
 margin-top: 32px;
 }
+
+/* ── Mobile Responsive ── */
+@media (max-width: 768px) {
+    .header {
+        padding: 12px 16px;
+    }
+    
+    .back-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+    
+    .header-title {
+        font-size: 18px;
+        margin-left: 8px;
+    }
+    
+    .settings-content {
+        padding: 16px;
+    }
+    
+    .user-info {
+        padding: 16px;
+        margin-bottom: 20px;
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+    }
+    
+    .user-avatar {
+        width: 48px;
+        height: 48px;
+        flex-shrink: 0;
+    }
+    
+    .user-avatar i {
+        font-size: 20px;
+    }
+    
+    .user-email {
+        font-size: 15px;
+        word-break: break-word;
+    }
+    
+    .user-label {
+        font-size: 12px;
+        margin-top: 2px;
+    }
+    
+    .settings-card {
+        margin-bottom: 16px;
+        padding: 16px;
+    }
+    
+    .settings-card-title {
+        font-size: 16px;
+        margin-bottom: 12px;
+    }
+    
+    .settings-item {
+        padding: 14px 16px;
+        min-height: 48px;
+    }
+    
+    .settings-item-icon {
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+        margin-right: 12px;
+    }
+    
+    .settings-item-content {
+        flex: 1;
+    }
+    
+    .settings-item-title {
+        font-size: 15px;
+        margin-bottom: 2px;
+    }
+    
+    .settings-item-subtitle {
+        font-size: 13px;
+    }
+    
+    .settings-toggle {
+        width: 48px;
+        height: 24px;
+    }
+    
+    .settings-toggle-slider {
+        width: 20px;
+        height: 20px;
+    }
+    
+    .settings-toggle-slider:before {
+        width: 16px;
+        height: 16px;
+    }
+    
+    .logout-btn {
+        width: 100%;
+        padding: 14px 20px;
+        font-size: 15px;
+        margin-top: 20px;
+    }
+    
+    .app-version {
+        font-size: 12px;
+        margin-top: 24px;
+    }
+}
+
+/* Touch-friendly interactions */
+@media (max-width: 768px) {
+    .settings-item:active,
+    .logout-btn:active,
+    .back-btn:active {
+        background-color: var(--border);
+        transform: scale(0.98);
+    }
+    
+    /* Better tap targets */
+    .settings-item,
+    .logout-btn,
+    .back-btn {
+        min-height: 44px;
+    }
+}
 </style>
 </head>
 <body>

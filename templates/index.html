@@ -1369,6 +1369,103 @@ transform: translateY(-1px);
 .chip-icon { width: 26px; height: 26px; font-size: 11px; }
 .intro-auth-row { top: 14px; right: 14px; gap: 8px; }
 .intro-signin-btn, .intro-signup-btn { padding: 8px 16px; font-size: 13px; }
+
+/* Mobile-specific styles */
+.header-actions { gap: 4px; }
+.header-btn { width: 36px; height: 36px; font-size: 14px; }
+.header-info p { font-size: 11px; }
+.logo-container { width: 32px; height: 32px; }
+.logo-container i { font-size: 16px; }
+
+/* Input area mobile */
+.input-area { padding: 12px 14px; }
+.input-wrapper { gap: 8px; }
+.attach-btn { width: 36px; height: 36px; font-size: 14px; }
+.send-btn { width: 36px; height: 36px; font-size: 14px; }
+#messageInput { font-size: 16px; padding: 12px 14px; min-height: 44px; }
+.powered-by { font-size: 11px; margin-top: 8px; }
+
+/* Chat messages mobile */
+.message { margin-bottom: 16px; }
+.message-bubble { padding: 12px 16px; border-radius: 18px; font-size: 15px; line-height: 1.4; }
+.message-bubble pre { font-size: 13px; }
+.message-bubble code { font-size: 13px; padding: 2px 6px; }
+
+/* Modal improvements for mobile */
+.imggen-modal { width: 95vw; max-width: 400px; margin: 20px; max-height: 90vh; }
+.imggen-modal-header { padding: 16px 20px; }
+.imggen-modal-body { padding: 16px 20px; }
+.imggen-controls { gap: 12px; }
+.imggen-slider { flex-direction: column; align-items: stretch; }
+.slider-group { margin-bottom: 16px; }
+.slider-label { font-size: 14px; margin-bottom: 8px; }
+.slider-input { width: 100%; }
+.imggen-prompt { font-size: 16px; min-height: 80px; }
+.imggen-generate-btn { padding: 14px 20px; font-size: 16px; }
+
+/* Install banner mobile */
+.install-banner { padding: 12px 16px; }
+.install-banner-content { gap: 12px; }
+.install-banner-text strong { font-size: 14px; }
+.install-banner-text span { font-size: 12px; }
+.install-btn { padding: 8px 16px; font-size: 14px; }
+
+/* Auth forms mobile */
+.auth-page { padding: 20px 16px; }
+.auth-form input { font-size: 16px; padding: 14px 16px; }
+.auth-form button { padding: 14px 20px; font-size: 16px; }
+.google-btn { padding: 14px 20px; font-size: 15px; }
+
+/* Settings mobile */
+.settings-content { padding: 16px; }
+.settings-card { padding: 16px; }
+.settings-item { padding: 14px 16px; }
+.settings-item-title { font-size: 15px; }
+.settings-item-subtitle { font-size: 13px; }
+.settings-icon { width: 36px; height: 36px; font-size: 16px; }
+
+/* History mobile */
+.history-content { padding: 16px; }
+.history-item { padding: 14px 16px; }
+.history-title { font-size: 15px; }
+.history-preview { font-size: 13px; }
+.history-date { font-size: 11px; }
+
+/* Touch-friendly interactions */
+.header-btn:active,
+.attach-btn:active,
+.send-btn:active,
+.imggen-generate-btn:active,
+.install-btn:active,
+.auth-form button:active,
+.google-btn:active { transform: scale(0.95); }
+
+/* Better scrolling on mobile */
+.chat-messages { -webkit-overflow-scrolling: touch; }
+.input-area { -webkit-overflow-scrolling: touch; }
+
+/* Hide desktop-specific elements on mobile */
+@media (max-width: 480px) {
+  .desktop-only { display: none !important; }
+}
+
+/* Improve tap targets */
+button,
+.attach-popup-item,
+.settings-item,
+.history-item { min-height: 44px; }
+
+/* Better text selection on mobile */
+.message-bubble { -webkit-user-select: text; user-select: text; }
+
+/* Prevent zoom on input focus */
+@media screen and (max-width: 767px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select { font-size: 16px !important; }
+}
 }
 </style>
 </head>

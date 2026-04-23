@@ -26,3 +26,5 @@ Thumbs.db
 # Cache
 *.cache
 .pytest_cache/
+render-cli/
+render-cli.zip

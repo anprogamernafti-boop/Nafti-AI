@@ -499,7 +499,11 @@ def index():
     if user:
         histories = ensure_user_sessions(user)
         sessions = histories.get(user, [])
-    return render_template('index.html', sessions=sessions)
+    response = app.make_response(render_template('index.html', sessions=sessions))
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/generate-image')
 def generate_image():

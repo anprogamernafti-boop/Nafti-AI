@@ -10,14 +10,10 @@
 <meta name="apple-mobile-web-app-title" content="Nafti AI">
 <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 
-<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
-<meta http-equiv="Pragma" content="no-cache" />
-<meta http-equiv="Expires" content="0" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
-#voiceTestBtn { display: none !important; }
 :root {
 --bg-primary: #F5F5F7;
 --bg-secondary: rgba(255,255,255,0.72);
@@ -1660,12 +1656,12 @@ transform: translateY(-1px);
 <body>
 <!-- Intro Splash Screen -->
 <div class="intro-overlay" id="introOverlay">
-{% if not session.get('user') %}
+
 <div class="intro-auth-row">
   <button class="intro-signin-btn" id="goSignIn">Sign In</button>
   <button class="intro-signup-btn" id="goSignUp">Sign Up</button>
 </div>
-{% endif %}
+
 <div class="intro-container">
 <div class="intro-icon">
 <i class="fa-solid fa-bolt"></i>
@@ -1691,20 +1687,16 @@ transform: translateY(-1px);
 <div class="intro-feature-text">Hautement personnalis&eacute;e</div>
 </div>
 </div>
-<button class="intro-cta-btn" id="startBtn">{% if session.get('user') %}Acc&eacute;der &agrave; Nafti AI{% else %}Commencer{% endif %}</button>
+<button class="intro-cta-btn" id="startBtn">Commencer</button>
 </div>
 </div>
 
-{% if not session.get('user') %}
+
 <!-- Auth Page -->
 <div class="auth-page" id="authPage" style="display:none;">
-  {% with messages = get_flashed_messages() %}
-  {% if messages %}
-  <div style="background:var(--error-bg);color:var(--error-text);padding:10px 14px;border-radius:var(--radius-md);margin-bottom:12px;font-size:13px;max-width:320px;width:100%;">
-    {% for message in messages %}{{ message }}{% endfor %}
-  </div>
-  {% endif %}
-  {% endwith %}
+  
+  
+  
 
   <!-- Login -->
   <div id="loginSection">
@@ -1720,7 +1712,7 @@ transform: translateY(-1px);
       <input type="password" name="password" placeholder="Mot de passe" required autocomplete="current-password">
       <button type="submit">Se connecter</button>
     </form>
-    <a href="{{ url_for('google.login') }}" class="google-btn">
+    <a href="/login/google" class="google-btn">
       <i class="fa-brands fa-google" style="margin-right:8px;"></i> Continuer avec Google
     </a>
     <p class="auth-switch">Pas encore de compte ? <a href="#" id="switchToSignUp">Cr&eacute;er un compte</a></p>
@@ -1740,13 +1732,13 @@ transform: translateY(-1px);
       <input type="password" name="password" placeholder="Mot de passe" required autocomplete="new-password">
       <button type="submit">Cr&eacute;er un compte</button>
     </form>
-    <a href="{{ url_for('google.login') }}" class="google-btn">
+    <a href="/login/google" class="google-btn">
       <i class="fa-brands fa-google" style="margin-right:8px;"></i> Continuer avec Google
     </a>
     <p class="auth-switch">D&eacute;j&agrave; un compte ? <a href="#" id="switchToSignIn">Se connecter</a></p>
   </div>
 </div>
-{% endif %}
+
 
 <!-- Header -->
 <div class="header">
@@ -1845,7 +1837,9 @@ transform: translateY(-1px);
 <button class="voice-btn" id="voiceBtn" title="Reconnaissance vocale">
 <i class="fa-solid fa-microphone"></i>
 </button>
-
+<button class="voice-btn" id="voiceTestBtn" title="Test reconnaissance vocale" style="background: #28a745; margin-left: 4px;">
+<i class="fa-solid fa-stethoscope"></i>
+</button>
 <div class="attach-popup" id="attachPopup">
 <div class="attach-popup-title">T&eacute;l&eacute;charger la pi&egrave;ce jointe</div>
 <div class="attach-popup-item" id="photoLibBtn">
@@ -2035,18 +2029,11 @@ transform: translateY(-1px);
 (function() {
 document.addEventListener('DOMContentLoaded', function() {
 if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(function(registrations) {
-      registrations.forEach(function(registration) {
-        console.log('🗑️ Désenregistrement du service worker actif:', registration.scope);
-        registration.unregister();
-      });
-    }).catch(function(err) {
-      console.log('SW unregistration failed', err);
-    });
+navigator.serviceWorker.register('/service-worker.js')
+.then(function(reg) { console.log('SW registered', reg.scope); })
+.catch(function(err) { console.log('SW registration failed', err); });
 }
 
-
-// Cleanup: voiceTestBtn has been permanently removed from HTML
 var deferredPrompt = null;
 var isInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
@@ -2959,66 +2946,136 @@ fetch('/api/session/' + sessionParam)
 });
 })();
 
+// === Voice Recognition ===
+(function() {
+document.addEventListener('DOMContentLoaded', function() {
+var voiceBtn = document.getElementById('voiceBtn');
+var messageInput = document.getElementById('messageInput');
+var recognition = null;
+var isListening = false;
 
+function initSpeechRecognition() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        console.warn('Speech recognition not supported');
+        voiceBtn.style.display = 'none';
+        return;
+    }
 
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'fr-FR'; // French language
 
+    recognition.onstart = function() {
+        isListening = true;
+        voiceBtn.classList.add('listening');
+        voiceBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+        voiceBtn.title = 'Arrêter la reconnaissance vocale';
+        showToast('Écoute en cours...', 'info');
+    };
+
+    recognition.onresult = function(event) {
+        var transcript = event.results[0][0].transcript;
+        messageInput.value += (messageInput.value ? ' ' : '') + transcript;
+        messageInput.style.height = 'auto';
+        messageInput.style.height = messageInput.scrollHeight + 'px';
+        messageInput.focus();
+    };
+
+    recognition.onerror = function(event) {
+        console.error('Speech recognition error:', event.error);
+        showToast('Erreur de reconnaissance vocale: ' + event.error, 'error');
+        stopListening();
+    };
+
+    recognition.onend = function() {
+        stopListening();
+    };
+}
+
+function startListening() {
+    if (!recognition) return;
+    try {
+        recognition.start();
+    } catch (e) {
+        console.error('Failed to start speech recognition:', e);
+        showToast('Impossible de démarrer la reconnaissance vocale', 'error');
+    }
+}
+
+function stopListening() {
+    if (!recognition || !isListening) return;
+    isListening = false;
+    voiceBtn.classList.remove('listening');
+    voiceBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+    voiceBtn.title = 'Reconnaissance vocale';
+    recognition.stop();
+}
+
+function showToast(message, type) {
+    // Simple toast notification
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + type;
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'error' ? '#ef4444' : type === 'info' ? '#3b82f6' : '#10b981'};
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        animation: toastSlideIn 0.3s ease;
+    `;
+    document.body.appendChild(toast);
+    setTimeout(function() {
+        toast.style.animation = 'toastSlideOut 0.3s ease';
+        setTimeout(function() { document.body.removeChild(toast); }, 300);
+    }, 3000);
+}
+
+voiceBtn.addEventListener('click', function() {
+    if (isListening) {
+        stopListening();
+    } else {
+        startListening();
+    }
+});
+
+// Initialize speech recognition when page loads
+initSpeechRecognition();
+});
+})();
+
+// === Bouton de test diagnostic ===
+(function() {
+document.addEventListener('DOMContentLoaded', function() {
+    var voiceTestBtn = document.getElementById('voiceTestBtn');
+    var diagnosticModal = null;
+
+    function createDiagnosticModal() {
+        if (diagnosticModal) return diagnosticModal;
+
+        diagnosticModal = document.createElement('div');
+        diagnosticModal.style.cssText = 'display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;';
+        diagnosticModal.textContent = 'Diagnostic vocal temporairement desactive.';
+        document.body.appendChild(diagnosticModal);
+        return diagnosticModal;
+    }
+
+    voiceTestBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var modal = createDiagnosticModal();
+        modal.style.display = 'flex';
+    });
+});
+})();
 
 </script>
 
 </body>
 </html>
-
-<script>
-// === Reconnaissance vocale ===
-(function() {
-document.addEventListener('DOMContentLoaded', function() {
-  var voiceBtn = document.getElementById('voiceBtn');
-  var messageInput = document.getElementById('messageInput');
-  if (!voiceBtn) return;
-  var recognition = null;
-  var isListening = false;
-
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    voiceBtn.style.display = 'none';
-    return;
-  }
-
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  recognition = new SR();
-  recognition.continuous = false;
-  recognition.interimResults = false;
-  recognition.lang = 'fr-FR';
-
-  recognition.onstart = function() {
-    isListening = true;
-    voiceBtn.classList.add('listening');
-    voiceBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
-    voiceBtn.title = 'Arr\u00eater';
-  };
-
-  recognition.onresult = function(event) {
-    var transcript = event.results[0][0].transcript;
-    messageInput.value += (messageInput.value ? ' ' : '') + transcript;
-    messageInput.dispatchEvent(new Event('input'));
-    messageInput.focus();
-  };
-
-  recognition.onerror = function() { stopListening(); };
-  recognition.onend = function() { stopListening(); };
-
-  function stopListening() {
-    if (!isListening) return;
-    isListening = false;
-    voiceBtn.classList.remove('listening');
-    voiceBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-    voiceBtn.title = 'Reconnaissance vocale';
-    try { recognition.stop(); } catch(e) {}
-  }
-
-  voiceBtn.addEventListener('click', function() {
-    if (isListening) { stopListening(); }
-    else { try { recognition.start(); } catch(e) {} }
-  });
-});
-})();
-</script>

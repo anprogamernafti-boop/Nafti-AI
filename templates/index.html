@@ -336,7 +336,8 @@ margin-bottom: 6px;
 .welcome p {
 color: var(--text-secondary);
 font-size: 14px;
-max-width: 380px;
+max-width: 100%;
+width: min(100%, 420px);
 line-height: 1.55;
 margin-bottom: 24px;
 }
@@ -354,7 +355,7 @@ margin-bottom: 12px;
 display: grid;
 grid-template-columns: 1fr 1fr;
 gap: 14px;
-max-width: 340px;
+max-width: 100%;
 width: 100%;
 margin-bottom: 28px;
 }
@@ -1435,19 +1436,42 @@ transform: translateY(-1px);
   }
 
   .chat-area { padding: 14px 10px 10px; }
-  .welcome { padding: 0 4px; }
+  .welcome {
+    padding: 0 8px;
+    width: 100%;
+    max-width: 100%;
+    min-height: calc(100vh - 180px);
+  }
   .welcome-icon { width: 76px; height: 76px; margin-bottom: 20px; }
   .welcome-icon i { font-size: 34px; }
   .welcome h2 { font-size: 22px; }
   .welcome p {
     font-size: 13px;
     max-width: 100%;
+    width: 100%;
     margin: 0 auto 18px;
   }
-  .suggestions {
-    display: flex;
-    flex-direction: column;
+  .welcome-subtitle { display: none; }
+  .welcome-features {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 10px;
+    max-width: 100%;
+    width: 100%;
+    padding: 0;
+    margin-bottom: 20px;
+  }
+  .feature-item {
+    padding: 12px 14px;
+    font-size: 12px;
+  }
+  .feature-icon { font-size: 16px; }
+  .suggestions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    max-width: 100%;
+    width: 100%;
   }
   .suggestion-chip {
     width: 100%;

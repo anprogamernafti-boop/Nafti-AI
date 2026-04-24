@@ -1,5 +1,5 @@
 // Nafti AI - Service Worker pour PWA
-const CACHE_NAME = 'nafti-ai-v4';
+const CACHE_NAME = 'nafti-ai-v5';
 
 // Ressources à mettre en cache pour le mode hors-ligne
 const STATIC_ASSETS = [

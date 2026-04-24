@@ -1,5 +1,5 @@
 // Nafti AI - Service Worker pour PWA
-const CACHE_NAME = 'nafti-ai-v1';
+const CACHE_NAME = 'nafti-ai-v4';
 
 // Ressources à mettre en cache pour le mode hors-ligne
 const STATIC_ASSETS = [
@@ -8,6 +8,7 @@ const STATIC_ASSETS = [
   '/static/mnt_static_manifest.json',
   '/static/mnt_static_icons_icon-192.png',
   '/static/mnt_static_icons_icon-512.png',
+  '/static/remove_test_buttons.js',
   'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
   'https://cdn.jsdelivr.net/npm/marked/marked.min.js'
@@ -49,6 +50,24 @@ self.addEventListener('fetch', (event) => {
           JSON.stringify({ error: "Vous êtes hors-ligne. Reconnectez-vous pour utiliser Nafti AI." }),
           { status: 503, headers: { 'Content-Type': 'application/json' } }
         );
+      })
+    );
+    return;
+  }
+
+  // Pour la page d'accueil, utiliser réseau d'abord pour éviter de servir un index obsolète
+  if (event.request.mode === 'navigate' || url.pathname === '/') {
+    event.respondWith(
+      fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const cloned = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, cloned);
+          });
+        }
+        return networkResponse;
+      }).catch(() => {
+        return caches.match(event.request);
       })
     );
     return;

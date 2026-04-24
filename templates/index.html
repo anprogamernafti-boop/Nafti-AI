@@ -10,10 +10,140 @@
 <meta name="apple-mobile-web-app-title" content="Nafti AI">
 <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="/static/remove_test_buttons.js?v=5"></script>
 <style>
+/* Masquer complètement tous les boutons de test vocal */
+#voiceTestBtn,
+#voiceBtn,
+.voice-btn,
+button[title="Test reconnaissance vocale"],
+button[title="Tester la reconnaissance vocale"],
+button[title*="Test reconnaissance"],
+button[title*="Tester la reconnaissance"],
+button[title*="diagnostique"],
+button[title*="diagnostic"],
+button[title*="diagnostic vocal"],
+button[aria-label="Test reconnaissance vocale"],
+button[aria-label="Tester la reconnaissance vocale"],
+button[aria-label*="Test reconnaissance"],
+button[aria-label*="Tester la reconnaissance"],
+button[aria-label*="diagnostique"],
+button[aria-label*="diagnostic"],
+button[aria-label*="diagnostic vocal"],
+button i.fa-stethoscope,
+button i.fa-cog,
+button i.fa-wrench,
+a[title*="Test reconnaissance"],
+a[title*="Tester la reconnaissance"],
+a[title*="diagnostique"],
+a[title*="diagnostic"],
+span[title*="Test reconnaissance"],
+span[title*="Tester la reconnaissance"],
+span[title*="diagnostique"],
+span[title*="diagnostic"],
+i.fa-stethoscope,
+i.fa-cog,
+i.fa-wrench,
+.voice-btn:not(#voiceBtn) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+</style>
+<script>
+// Script de diagnostic pour identifier tous les boutons
+(function() {
+  'use strict';
+
+  function logAllButtons() {
+    console.log('🔍 === DIAGNOSTIC: Liste de tous les boutons sur la page ===');
+    var buttons = document.querySelectorAll('button');
+    console.log(`Total boutons trouvés: ${buttons.length}`);
+    buttons.forEach(function(btn, index) {
+      var icon = btn.querySelector('i');
+      var iconClass = icon ? icon.className : 'no icon';
+      console.log(`${index + 1}: ID="${btn.id}", Title="${btn.title}", Class="${btn.className}", Icon="${iconClass}", Text="${btn.textContent.trim()}"`);
+    });
+    console.log('🔍 === FIN DIAGNOSTIC ===');
+  }
+
+  // Exécuter immédiatement
+  logAllButtons();
+
+  // Exécuter au chargement du DOM
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', logAllButtons);
+  }
+
+  // Exécuter après un court délai
+  setTimeout(logAllButtons, 100);
+  setTimeout(logAllButtons, 500);
+  setTimeout(logAllButtons, 1000);
+
+  console.log('🛡️ Script de diagnostic des boutons activé');
+})();
+
+// Script pour forcer la mise à jour du service worker et vider les caches
+(function() {
+  'use strict';
+
+  function forceServiceWorkerUpdate() {
+    if (sessionStorage.getItem('sw_cleared_done')) {
+      console.log('ℹ️ Service worker purge déjà effectuée cette session, arrêt.');
+      return;
+    }
+    sessionStorage.setItem('sw_cleared_done', '1');
+    console.log('🔄 Forçage de la mise à jour du service worker...');
+
+    var purgePromises = [];
+
+    // Vider tous les caches
+    if ('caches' in window) {
+      purgePromises.push(
+        caches.keys().then(function(names) {
+          return Promise.all(names.map(function(name) {
+            console.log('🗑️ Suppression du cache:', name);
+            return caches.delete(name);
+          }));
+        })
+      );
+    }
+
+    // Désenregistrer tous les service workers
+    if ('serviceWorker' in navigator) {
+      purgePromises.push(
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          return Promise.all(registrations.map(function(registration) {
+            console.log('🗑️ Désenregistrement du service worker:', registration.scope);
+            return registration.unregister();
+          }));
+        })
+      );
+    }
+
+    Promise.all(purgePromises).finally(function() {
+      console.log('🔄 Caches et service workers purgés, rechargement avec une URL unique...');
+      var separator = window.location.href.indexOf('?') === -1 ? '?' : '&';
+      var url = window.location.href;
+      if (!url.includes('sw_cleared=1')) {
+        window.location.replace(url + separator + 'sw_cleared=1');
+      } else {
+        window.location.reload();
+      }
+    });
+  }
+
+  // Exécuter une fois pour nettoyer
+  forceServiceWorkerUpdate();
+})();
+</script>
 :root {
 --bg-primary: #F5F5F7;
 --bg-secondary: rgba(255,255,255,0.72);
@@ -731,6 +861,64 @@ background: var(--accent-glow);
 }
 .attach-btn:active { transform: scale(.92); }
 
+/* Voice recognition button */
+.voice-btn {
+width: 38px; height: 38px;
+border-radius: 50%;
+border: 1.5px solid var(--border);
+background: var(--bg-chat);
+color: var(--text-secondary);
+display: flex;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+flex-shrink: 0;
+font-size: 18px;
+transition: all .2s ease;
+position: relative;
+margin-left: 8px;
+}
+.voice-btn:hover {
+border-color: var(--accent);
+color: var(--accent);
+background: var(--accent-glow);
+}
+.voice-btn:active { transform: scale(.92); }
+.voice-btn.listening {
+border-color: #ef4444;
+color: #ef4444;
+background: rgba(239, 68, 68, 0.1);
+animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+0%, 100% { opacity: 1; }
+50% { opacity: 0.7; }
+}
+
+/* Toast notifications */
+.toast {
+position: fixed;
+top: 20px;
+right: 20px;
+padding: 12px 16px;
+border-radius: 8px;
+box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+z-index: 10000;
+font-size: 14px;
+animation: toastSlideIn 0.3s ease;
+}
+.toast-error { background: #ef4444; color: white; }
+.toast-info { background: #3b82f6; color: white; }
+.toast-success { background: #10b981; color: white; }
+@keyframes toastSlideIn {
+from { transform: translateX(100%); opacity: 0; }
+to { transform: translateX(0); opacity: 1; }
+}
+@keyframes toastSlideOut {
+from { transform: translateX(0); opacity: 1; }
+to { transform: translateX(100%); opacity: 0; }
+}
+
 /* Attachment popup */
 .attach-popup {
 display: none;
@@ -1392,7 +1580,8 @@ transform: translateY(-1px);
   .intro-overlay {
     padding: 16px;
     justify-content: flex-start;
-  }}
+  }
+}
 
   .intro-container {
     max-width: 100%;
@@ -1586,15 +1775,12 @@ transform: translateY(-1px);
   .history-item { min-height: 44px; }
   .chat-area,
   .input-area { -webkit-overflow-scrolling: touch; }
-}
 
-@media screen and (max-width: 767px) {
   input[type="text"],
   input[type="email"],
   input[type="password"],
   textarea,
   select { font-size: 16px !important; }
-}
 </style>
 </head>
 <body>
@@ -1782,6 +1968,7 @@ transform: translateY(-1px);
 <button class="attach-btn" id="attachBtn" title="Ajouter une pi&egrave;ce jointe">
 <i class="fa-solid fa-plus"></i>
 </button>
+
 <div class="attach-popup" id="attachPopup">
 <div class="attach-popup-title">T&eacute;l&eacute;charger la pi&egrave;ce jointe</div>
 <div class="attach-popup-item" id="photoLibBtn">
@@ -1876,6 +2063,7 @@ transform: translateY(-1px);
 <script>
   // === Intro Splash Screen ===
   (function() {
+    document.addEventListener('DOMContentLoaded', function() {
     var introOverlay = document.getElementById('introOverlay');
     var startBtn = document.getElementById('startBtn');
     var goSignIn = document.getElementById('goSignIn');
@@ -1961,17 +2149,111 @@ transform: translateY(-1px);
     if (switchToSignIn) {
       switchToSignIn.addEventListener('click', function(e) { e.preventDefault(); showLogin(); });
     }
+    });
   })();
 </script>
 
 <script>
 // === PWA : Service Worker & Install Prompt ===
 (function() {
+document.addEventListener('DOMContentLoaded', function() {
 if ('serviceWorker' in navigator) {
-navigator.serviceWorker.register('/service-worker.js')
-.then(function(reg) { console.log('SW registered', reg.scope); })
-.catch(function(err) { console.log('SW registration failed', err); });
+    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+      registrations.forEach(function(registration) {
+        console.log('🗑️ Désenregistrement du service worker actif:', registration.scope);
+        registration.unregister();
+      });
+    }).catch(function(err) {
+      console.log('SW unregistration failed', err);
+    });
 }
+
+function removeOldVoiceTestButton() {
+  // Supprimer immédiatement tous les boutons de test vocal
+  var oldTestBtn = document.getElementById('voiceTestBtn');
+  if (oldTestBtn) {
+    oldTestBtn.remove();
+    console.log('Removed voiceTestBtn by ID');
+  }
+
+  // Supprimer par contenu, titre, aria-label, ou icône
+  document.querySelectorAll('button, a, div').forEach(function(element) {
+    var text = (element.textContent || '').trim().toLowerCase();
+    var title = (element.title || '').trim().toLowerCase();
+    var label = (element.getAttribute('aria-label') || '').trim().toLowerCase();
+    var icon = element.querySelector('i');
+    var isTestPhrase = title.includes('test') || title.includes('diagnostique') || title.includes('diagnostic');
+    var isLabelMatch = label.includes('test') || label.includes('diagnostique') || label.includes('diagnostic');
+    var isTextMatch = text.includes('test') || text.includes('diagnostique') || text.includes('diagnostic');
+    var badIcon = icon && (icon.classList.contains('fa-stethoscope') || icon.classList.contains('fa-cog') || icon.classList.contains('fa-wrench'));
+    var isNotMicrophoneVoice = element.classList && element.classList.contains('voice-btn') && (!icon || !icon.classList.contains('fa-microphone'));
+
+    if (element.id === 'voiceTestBtn' || isTestPhrase || isLabelMatch || isTextMatch || badIcon || isNotMicrophoneVoice) {
+      if (element.id !== 'voiceBtn') {
+        element.style.display = 'none';
+        element.style.visibility = 'hidden';
+        element.style.opacity = '0';
+        element.style.pointerEvents = 'none';
+        console.log('Removed button by heuristic:', element.id || element.title || element.getAttribute('aria-label') || element.textContent.trim());
+      }
+    }
+  });
+
+  document.querySelectorAll('i.fa-stethoscope, i.fa-cog, i.fa-wrench').forEach(function(icon) {
+    var target = icon.closest('button, a, div');
+    if (target && target.id !== 'voiceBtn') {
+      target.style.display = 'none';
+      target.style.visibility = 'hidden';
+      target.style.opacity = '0';
+      target.style.pointerEvents = 'none';
+      console.log('Removed parent of diagnostic icon:', target.id || target.className || target.textContent.trim());
+    }
+  });
+
+  // Observer les changements DOM pour supprimer les boutons ajoutés dynamiquement
+  var observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+      mutation.addedNodes.forEach(function(node) {
+        if (node.nodeType === 1 && node.tagName === 'BUTTON') {
+          var btn = node;
+          var text = (btn.textContent || '').trim().toLowerCase();
+          var title = (btn.title || '').trim().toLowerCase();
+          var label = (btn.getAttribute('aria-label') || '').trim().toLowerCase();
+          var icon = btn.querySelector('i');
+          var isDiagnostique = title.includes('test') || title.includes('diagnostique') || title.includes('diagnostic') || title.includes('reconnaissance');
+          var isLabelMatch = label.includes('test') || label.includes('diagnostique') || label.includes('diagnostic') || label.includes('reconnaissance');
+          var isTextMatch = text.includes('test') || text.includes('diagnostique') || text.includes('diagnostic') || text.includes('reconnaissance');
+          var badIcon = icon && (icon.classList.contains('fa-stethoscope') || icon.classList.contains('fa-cog') || icon.classList.contains('fa-wrench'));
+
+          if (btn.id === 'voiceTestBtn' || isDiagnostique || isLabelMatch || isTextMatch || badIcon) {
+            if (btn.id !== 'voiceBtn') {
+              btn.remove();
+              console.log('Removed dynamically added test button by heuristic');
+            }
+          }
+        }
+      });
+    });
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+
+  console.log('Voice test button removal system active');
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', removeOldVoiceTestButton);
+} else {
+  removeOldVoiceTestButton();
+}
+
+// Exécuter aussi après un délai pour être sûr
+setTimeout(removeOldVoiceTestButton, 100);
+setTimeout(removeOldVoiceTestButton, 500);
+setTimeout(removeOldVoiceTestButton, 1000);
 
 var deferredPrompt = null;
 var isInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
@@ -2091,11 +2373,13 @@ if (installBanner) installBanner.style.display = 'none';
 if (installModalOverlay) installModalOverlay.classList.remove('active');
 deferredPrompt = null;
 });
+});
 })();
 </script>
 
 <script>
 (function() {
+document.addEventListener('DOMContentLoaded', function() {
 // === Theme Toggle ===
 var themeToggleBtn = document.getElementById('themeToggleBtn');
 var themeIcon = document.getElementById('themeIcon');
@@ -2880,7 +3164,168 @@ fetch('/api/session/' + sessionParam)
 })
 .catch(function(e) { console.error('Failed to load session', e); });
 }
+});
 })();
+
+// === Voice Recognition ===
+(function() {
+document.addEventListener('DOMContentLoaded', function() {
+var voiceBtn = document.getElementById('voiceBtn');
+var messageInput = document.getElementById('messageInput');
+var recognition = null;
+var isListening = false;
+
+function initSpeechRecognition() {
+    console.log('🔍 Initialisation reconnaissance vocale...');
+    console.log('isSecureContext:', window.isSecureContext);
+    console.log('location.protocol:', location.protocol);
+    console.log('location.hostname:', location.hostname);
+
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        console.warn('Speech recognition not supported');
+        voiceBtn.style.display = 'none';
+        return;
+    }
+
+    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        console.warn('Speech recognition requires HTTPS or localhost');
+        showToast('Reconnaissance vocale nécessite HTTPS ou localhost.', 'error');
+        voiceBtn.style.display = 'none';
+        document.getElementById('voiceHelp').style.display = 'block';
+        return;
+    }
+
+    // Vérifier si on est sur HTTPS avec un certificat potentiellement non accepté
+    if (location.protocol === 'https:' && !window.isSecureContext) {
+        console.warn('HTTPS but not secure context - certificate likely not accepted');
+        showToast('Acceptez le certificat SSL pour activer la reconnaissance vocale.', 'error');
+        voiceBtn.style.display = 'none';
+        document.getElementById('voiceHelp').style.display = 'block';
+        return;
+    }
+
+    console.log('✅ API disponible, création de l\'instance...');
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'fr-FR'; // French language
+
+    recognition.onstart = function() {
+        isListening = true;
+        voiceBtn.classList.add('listening');
+        voiceBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+        voiceBtn.title = 'Arrêter la reconnaissance vocale';
+        showToast('Écoute en cours...', 'info');
+    };
+
+    recognition.onresult = function(event) {
+        var transcript = event.results[0][0].transcript;
+        messageInput.value += (messageInput.value ? ' ' : '') + transcript;
+        messageInput.style.height = 'auto';
+        messageInput.style.height = messageInput.scrollHeight + 'px';
+        messageInput.focus();
+    };
+
+    recognition.onerror = function(event) {
+        console.error('Speech recognition error:', event.error);
+        let errorMessage = 'Erreur de reconnaissance vocale: ' + event.error;
+
+        switch(event.error) {
+            case 'not-allowed':
+                errorMessage = 'Microphone non autorisé. Vérifiez les permissions du navigateur.';
+                break;
+            case 'no-speech':
+                errorMessage = 'Aucune parole détectée. Réessayez.';
+                break;
+            case 'audio-capture':
+                errorMessage = 'Problème d\'accès au microphone.';
+                break;
+            case 'network':
+                errorMessage = 'Erreur réseau lors de la reconnaissance.';
+                break;
+            case 'service-not-allowed':
+                errorMessage = 'Service de reconnaissance vocale non autorisé.';
+                break;
+        }
+
+        showToast(errorMessage, 'error');
+        stopListening();
+    };
+
+    recognition.onend = function() {
+        stopListening();
+    };
+}
+
+function startListening() {
+    if (!recognition) {
+        console.error('Recognition not initialized');
+        showToast('Reconnaissance vocale non initialisée', 'error');
+        return;
+    }
+    try {
+        console.log('🎤 Starting speech recognition...');
+        recognition.start();
+    } catch (e) {
+        console.error('Failed to start speech recognition:', e);
+        if (e.name === 'InvalidStateError') {
+            showToast('Reconnaissance vocale déjà en cours', 'error');
+        } else if (e.name === 'NotAllowedError') {
+            showToast('Microphone non autorisé. Vérifiez les permissions.', 'error');
+        } else {
+            showToast('Impossible de démarrer la reconnaissance vocale: ' + e.message, 'error');
+        }
+    }
+}
+
+function stopListening() {
+    if (!recognition || !isListening) return;
+    isListening = false;
+    voiceBtn.classList.remove('listening');
+    voiceBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+    voiceBtn.title = 'Reconnaissance vocale';
+    recognition.stop();
+}
+
+function showToast(message, type) {
+    // Simple toast notification
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + type;
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'error' ? '#ef4444' : type === 'info' ? '#3b82f6' : '#10b981'};
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        animation: toastSlideIn 0.3s ease;
+    `;
+    document.body.appendChild(toast);
+    setTimeout(function() {
+        toast.style.animation = 'toastSlideOut 0.3s ease';
+        setTimeout(function() { document.body.removeChild(toast); }, 300);
+    }, 3000);
+}
+
+voiceBtn.addEventListener('click', function() {
+    if (isListening) {
+        stopListening();
+    } else {
+        startListening();
+    }
+});
+
+// Initialize speech recognition when page loads
+initSpeechRecognition();
+});
+})();
+
 </script>
 
 </body>

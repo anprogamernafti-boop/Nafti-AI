@@ -1027,11 +1027,22 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     print("=" * 50)
     print("  🚀 Nafti AI - Serveur démarré (PWA activée)")
-    print(f"  📍 http://0.0.0.0:{port}")
+    print(f"  📍 https://0.0.0.0:{port} (SSL activé pour reconnaissance vocale)")
+    print(f"  🔒 Certificat SSL: server.crt/server.key")
     print(f"  🤖 Modèle texte: {GROQ_MODEL}")
     print(f"  🖼️  Modèle vision: {GROQ_VISION_MODEL}")
     print(f"  🎨 Modèle image: {HF_IMAGE_MODEL} (Local SDXL)")
     print(f"  🔑 Clé Groq: {'✅ configurée' if GROQ_API_KEY else '❌ MANQUANTE'}")
     print(f"  💾 Utilisateurs: {USERS_FILE} (auto-créé)")
     print("=" * 50)
-    app.run(host="0.0.0.0", port=port, debug=False)
+
+    # Configuration SSL pour la reconnaissance vocale
+    ssl_context = None
+    if os.path.exists('server.crt') and os.path.exists('server.key'):
+        ssl_context = ('server.crt', 'server.key')
+        print("  🔐 SSL activé - Reconnaissance vocale disponible")
+        print(f"  ℹ️  Ouvrez https://localhost:{port} et acceptez le certificat si nécessaire")
+    else:
+        print("  ⚠️  SSL non configuré - Reconnaissance vocale limitée")
+
+    app.run(host="0.0.0.0", port=port, debug=False, ssl_context=ssl_context)

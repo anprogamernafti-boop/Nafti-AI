@@ -541,6 +541,59 @@ transform: translateY(-1px);
 transform: translateY(0);
 }
 
+/* Speech synthesis button for AI messages */
+.speak-btn {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+width: 32px;
+height: 32px;
+margin-left: 8px;
+background: var(--accent);
+color: white;
+border: none;
+border-radius: 50%;
+cursor: pointer;
+font-size: 14px;
+transition: all 0.2s ease;
+vertical-align: middle;
+flex-shrink: 0;
+}
+
+.speak-btn:hover {
+background: var(--accent-light);
+transform: scale(1.1);
+}
+
+.speak-btn:active {
+transform: scale(0.95);
+}
+
+.speak-btn.playing {
+background: #ef4444;
+animation: pulse-speaker 1.5s infinite;
+}
+
+@keyframes pulse-speaker {
+0%, 100% { opacity: 1; }
+50% { opacity: 0.7; }
+}
+
+.speak-btn:disabled {
+opacity: 0.5;
+cursor: not-allowed;
+}
+
+.message-bubble-with-controls {
+display: flex;
+align-items: flex-start;
+gap: 8px;
+}
+
+.message-bubble-content {
+flex: 1;
+}
+
 /* Markdown */
 .message-bubble p { margin-bottom: 10px; }
 .message-bubble p:last-child { margin-bottom: 0; }
@@ -2763,6 +2816,7 @@ var aiText = await callAI(messages, imagesBase64);
 if (currentAIBubble) {
 currentAIBubble.innerHTML = parseMarkdown(aiText);
 addRetryButton(currentAIBubble);
+addSpeakButton(currentAIBubble, aiText);
 window.conversationHistory.push({ role: 'assistant', content: aiText });
 }
 finishGeneration();
@@ -2773,6 +2827,151 @@ if (currentAIBubble) showError(currentAIBubble, err.message || 'Impossible de co
 window.conversationHistory.pop();
 finishGeneration();
 }
+}
+
+// === Text-to-Speech Synthesis ===
+window._currentAudio = null;
+
+function extractPlainText(markdown) {
+  // Remove markdown formatting to get plain text for synthesis
+  var text = markdown
+    .replace(/!\[.*?\]\(.*?\)/g, '')  // Remove images
+    .replace(/\[([^\]]+)\]\(.*?\)/g, '$1')  // Convert links to text
+    .replace(/#{1,6}\s+/g, '')  // Remove headers
+    .replace(/\*\*|__/g, '')  // Remove bold
+    .replace(/\*|_/g, '')  // Remove italic
+    .replace(/`{3}[\s\S]*?`{3}/g, '')  // Remove code blocks
+    .replace(/`([^`]+)`/g, '$1')  // Convert inline code to text
+    .replace(/^\s*[-*+]\s+/gm, '')  // Remove lists
+    .replace(/^\s*>\s+/gm, '')  // Remove blockquotes
+    .trim();
+  return text;
+}
+
+function addSpeakButton(bubble, aiText) {
+  if (!bubble) return;
+  
+  var plainText = extractPlainText(aiText);
+  if (!plainText || plainText.length === 0) return;
+  
+  // Create a container for the button
+  var buttonContainer = document.createElement('div');
+  buttonContainer.style.marginTop = '8px';
+  buttonContainer.style.display = 'flex';
+  buttonContainer.style.alignItems = 'center';
+  buttonContainer.style.gap = '4px';
+  
+  var speakBtn = document.createElement('button');
+  speakBtn.className = 'speak-btn';
+  speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+  speakBtn.title = 'Écouter la réponse';
+  speakBtn.onclick = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    speakText(plainText, speakBtn);
+  };
+  
+  buttonContainer.appendChild(speakBtn);
+  bubble.appendChild(buttonContainer);
+}
+
+function speakText(text, button) {
+  if (!text || text.length === 0) return;
+  
+  // Stop current audio if playing
+  if (window._currentAudio) {
+    window._currentAudio.pause();
+    window._currentAudio = null;
+    if (window._currentSpeakBtn) {
+      window._currentSpeakBtn.classList.remove('playing');
+      window._currentSpeakBtn.disabled = false;
+    }
+  }
+  
+  if (button) {
+    button.disabled = true;
+    button.classList.add('playing');
+    window._currentSpeakBtn = button;
+  }
+  
+  // Detect language from the text
+  var lang = 'fr';  // Default to French
+  try {
+    // Simple language detection
+    if (/[\u0600-\u06FF]/.test(text)) {  // Arabic script
+      lang = 'ar';
+    } else if (/[\u0410-\u044F]/.test(text)) {  // Cyrillic
+      lang = 'ru';
+    } else if (/[\u4E00-\u9FA5]/.test(text)) {  // Chinese
+      lang = 'zh-CN';
+    } else if (/[\u3040-\u309F]/.test(text)) {  // Hiragana
+      lang = 'ja';
+    } else if (/[\uAC00-\uD7A3]/.test(text)) {  // Korean
+      lang = 'ko';
+    } else if (/[\u0E00-\u0E7F]/.test(text)) {  // Thai
+      lang = 'th';
+    }
+  } catch (e) {
+    // Default to French if detection fails
+  }
+  
+  // Call the API endpoint
+  fetch('/api/synthesize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: text.substring(0, 5000), lang: lang })
+  })
+  .then(function(response) {
+    if (!response.ok) throw new Error('Erreur API: ' + response.status);
+    return response.blob();
+  })
+  .then(function(blob) {
+    var url = URL.createObjectURL(blob);
+    var audio = new Audio(url);
+    window._currentAudio = audio;
+    
+    audio.onended = function() {
+      window._currentAudio = null;
+      if (button) {
+        button.classList.remove('playing');
+        button.disabled = false;
+      }
+      URL.revokeObjectURL(url);
+    };
+    
+    audio.onerror = function() {
+      window._currentAudio = null;
+      if (button) {
+        button.classList.remove('playing');
+        button.disabled = false;
+        button.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i>';
+        button.title = 'Erreur de lecture';
+      }
+      URL.revokeObjectURL(url);
+    };
+    
+    audio.play().catch(function(err) {
+      console.error('Erreur de lecture audio:', err);
+      window._currentAudio = null;
+      if (button) {
+        button.classList.remove('playing');
+        button.disabled = false;
+        button.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i>';
+        button.title = 'Erreur de lecture';
+      }
+      URL.revokeObjectURL(url);
+    });
+  })
+  .catch(function(err) {
+    console.error('Erreur synthèse vocale:', err);
+    window._currentAudio = null;
+    if (button) {
+      button.classList.remove('playing');
+      button.disabled = false;
+      button.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i>';
+      button.title = 'Erreur de synthèse';
+    }
+  });
 }
 
 window.sendMessage = sendMessage;

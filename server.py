@@ -718,6 +718,38 @@ def chat_public():
         return jsonify({"error": f"Erreur: {str(e)}"}), 500
 
 
+@app.route('/api/synthesize', methods=['POST'])
+def synthesize_voice():
+    """Synthesize text to speech using gTTS"""
+    try:
+        from gtts import gTTS
+        
+        data = request.get_json()
+        text = data.get('text', '').strip()
+        lang = data.get('lang', 'fr')
+        
+        if not text:
+            return jsonify({"error": "Text required"}), 400
+        
+        if len(text) > 5000:
+            return jsonify({"error": "Text too long (max 5000 chars)"}), 400
+        
+        tts = gTTS(text=text, lang=lang, slow=False)
+        audio_buffer = BytesIO()
+        tts.write_to_fp(audio_buffer)
+        audio_buffer.seek(0)
+        
+        return send_file(
+            audio_buffer,
+            mimetype='audio/mpeg',
+            as_attachment=False,
+            download_name=None
+        )
+    except Exception as e:
+        print(f"TTS Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/ai", methods=["POST"])
 def proxy_ai():
     """Proxy that relays requests to Groq API - stores conversation history per user"""

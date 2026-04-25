@@ -2978,6 +2978,25 @@ function detectLanguage(text) {
   // Default to English for any other Latin text
   return { lang: 'en', langCode: 'en-US' };
 }
+
+function speakText(text, button) {
+  if (!text || text.length === 0) return;
+  
+  // Stop current audio if playing
+  if (window._currentAudio) {
+    window._currentAudio.pause();
+    window._currentAudio = null;
+    if (window._currentSpeakBtn) {
+      window._currentSpeakBtn.classList.remove('playing');
+      window._currentSpeakBtn.disabled = false;
+    }
+  }
+  
+  if (button) {
+    button.disabled = true;
+    button.classList.add('playing');
+    window._currentSpeakBtn = button;
+  }
   
   // Try gTTS API first (if available)
   var langDetection = detectLanguage(text);

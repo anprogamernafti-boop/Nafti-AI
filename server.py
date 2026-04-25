@@ -106,21 +106,104 @@ def verify_password(password, password_hash):
     return hash_password(password) == password_hash
 
 def detect_language(text):
-    """Detect language using langdetect library and script heuristics."""
+    """Detect language using langdetect library and script heuristics with keyword fallback."""
     if not text or not text.strip():
         return "en"
 
     stripped_text = text.strip()
+    
     # If Arabic script is present, prefer Arabic immediately
     if re.search(r"[\u0600-\u06FF]", stripped_text):
         return "ar"
-
+    
+    # Russian/Cyrillic
+    if re.search(r"[\u0400-\u04FF]", stripped_text):
+        return "ru"
+    
+    # Greek
+    if re.search(r"[\u0370-\u03FF]", stripped_text):
+        return "el"
+    
+    # Hebrew
+    if re.search(r"[\u0590-\u05FF]", stripped_text):
+        return "he"
+    
+    # Chinese Han characters
+    if re.search(r"[\u4E00-\u9FFF]", stripped_text):
+        return "zh"
+    
+    # Japanese Hiragana/Katakana
+    if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", stripped_text):
+        return "ja"
+    
+    # Korean
+    if re.search(r"[\uAC00-\uD7AF]", stripped_text):
+        return "ko"
+    
+    # Thai
+    if re.search(r"[\u0E00-\u0E7F]", stripped_text):
+        return "th"
+    
+    # Vietnamese with diacritics
+    if re.search(r"[ăâêôơư]", stripped_text):
+        return "vi"
+    
+    # Try langdetect for longer texts
     try:
-        lang_code = detect(stripped_text)
-        return lang_code
+        # Only use langdetect if text is reasonably long
+        if len(stripped_text.split()) >= 3:  # At least 3 words
+            lang_code = detect(stripped_text)
+            return lang_code
     except LangDetectException:
-        # If detection fails, default to English
-        return "en"
+        pass
+    
+    # Fallback to keyword-based detection for short phrases
+    lower_text = stripped_text.lower()
+    
+    # English keywords
+    english_keywords = ['the', 'is', 'are', 'am', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'has', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'does', 'at', 'this', 'but', 'by', 'from', 'was', 'were', 'been', 'or', 'an', 'would', 'could', 'should', 'will', 'can', 'my', 'me', 'him', 'her', 'they', 'them', 'how', 'what', 'why', 'when', 'where', 'which', 'who', 'hello', 'hi', 'yes', 'no', 'please', 'thank', 'thanks', 'sorry']
+    english_count = sum(1 for word in english_keywords if re.search(r'\b' + word + r'\b', lower_text))
+    
+    # French keywords
+    french_keywords = ['le', 'la', 'les', 'de', 'des', 'un', 'une', 'et', 'à', 'est', 'sont', 'je', 'tu', 'il', 'elle', 'nous', 'vous', 'ils', 'elles', 'en', 'que', 'pour', 'dans', 'avec', 'c\'est', 'ce', 'ça', 'pas', 'ne', 'plus', 'qui', 'comment', 'pourquoi', 'quand', 'où', 'bonjour', 'au', 'sur', 'ou', 'mon', 'ma', 'ton', 'ta', 'son', 'sa']
+    french_count = sum(1 for word in french_keywords if re.search(r'\b' + word + r'\b', lower_text))
+    
+    # Spanish keywords
+    spanish_keywords = ['el', 'la', 'los', 'las', 'de', 'del', 'a', 'al', 'un', 'una', 'unos', 'unas', 'y', 'es', 'son', 'está', 'están', 'yo', 'tú', 'él', 'ella', 'nosotros', 'vosotros', 'ellos', 'ellas', 'que', 'para', 'por', 'con', 'en', 'hola', 'sí', 'no', 'gracias', 'por favor', 'cómo', 'por qué', 'cuándo', 'dónde', 'cuál']
+    spanish_count = sum(1 for word in spanish_keywords if re.search(r'\b' + word + r'\b', lower_text))
+    
+    # German keywords
+    german_keywords = ['der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einem', 'einen', 'einer', 'eines', 'und', 'ist', 'sind', 'bin', 'bist', 'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'von', 'zu', 'in', 'an', 'mit', 'auf', 'für', 'nicht', 'auch', 'wie', 'wer', 'was', 'wo', 'wann', 'warum', 'hallo']
+    german_count = sum(1 for word in german_keywords if re.search(r'\b' + word + r'\b', lower_text))
+    
+    # Italian keywords
+    italian_keywords = ['il', 'lo', 'la', 'i', 'gli', 'le', 'di', 'da', 'a', 'un', 'uno', 'una', 'e', 'è', 'sono', 'siamo', 'sei', 'io', 'tu', 'lui', 'lei', 'noi', 'voi', 'loro', 'che', 'per', 'in', 'con', 'su', 'non', 'ciao', 'grazie', 'come', 'perché', 'quando', 'dove']
+    italian_count = sum(1 for word in italian_keywords if re.search(r'\b' + word + r'\b', lower_text))
+    
+    # Portuguese keywords
+    portuguese_keywords = ['o', 'a', 'os', 'as', 'de', 'da', 'do', 'das', 'dos', 'um', 'uma', 'uns', 'umas', 'e', 'é', 'são', 'ser', 'estar', 'eu', 'tu', 'ele', 'ela', 'nós', 'vós', 'eles', 'elas', 'que', 'para', 'por', 'com', 'em', 'olá', 'obrigado', 'como', 'por que', 'quando', 'onde', 'qual']
+    portuguese_count = sum(1 for word in portuguese_keywords if re.search(r'\b' + word + r'\b', lower_text))
+    
+    # Find the language with the highest count
+    scores = {
+        'en': english_count,
+        'fr': french_count,
+        'es': spanish_count,
+        'de': german_count,
+        'it': italian_count,
+        'pt': portuguese_count
+    }
+    
+    detected_lang = max(scores, key=scores.get)
+    
+    # If English has the highest score (or tied), return it
+    # Otherwise return the language with the highest count
+    if detected_lang and scores[detected_lang] > 0:
+        return detected_lang
+    
+    # Final fallback: default to English
+    return "en"
+
 
 def detect_tunisian_dialect(text):
     """Detect if the user specifically requests Tunisian dialect in Arabic or French."""

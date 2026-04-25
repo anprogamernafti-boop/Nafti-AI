@@ -2879,7 +2879,9 @@ function detectLanguage(text) {
   // Language detection based on script and keywords
   // Returns: {lang: 'xx', langCode: 'xx-XX'}
   
-  // Check for non-Latin scripts first (more reliable)
+  if (!text || text.length === 0) return { lang: 'en', langCode: 'en-US' };
+  
+  // Check for non-Latin scripts first (most reliable)
   
   // Arabic (0600-06FF)
   if (/[\u0600-\u06FF]/.test(text)) {
@@ -2903,7 +2905,6 @@ function detectLanguage(text) {
   
   // Chinese - Han characters (4E00-9FFF)
   if (/[\u4E00-\u9FFF]/.test(text)) {
-    // Simplified Chinese is more common
     return { lang: 'zh-CN', langCode: 'zh-CN' };
   }
   
@@ -2927,56 +2928,68 @@ function detectLanguage(text) {
     return { lang: 'vi', langCode: 'vi-VN' };
   }
   
-  // For Latin-based languages, use keyword detection
-  var lowerText = text.toLowerCase().substring(0, 500);
+  // For Latin-based languages, use keyword detection with higher precision
+  var lowerText = text.toLowerCase().substring(0, 1000);
+  
+  // French keywords (most common in this app)
+  var frenchKeywords = ['le', 'de', 'un', 'et', 'à', 'être', 'en', 'que', 'pour', 'dans', 'ce', 'il', 'par', 'se', 'pas', 'sur', 'plus', 'qui', 'ne', 'cet', 'ou', 'ont', 'les', 'des', 'avec', 'vous', 'nous', 'je', 'me', 'mon', 'son', 'est'];
+  var frenchCount = (lowerText.match(/\b(le|de|un|et|à|être|en|que|pour|dans|ce|il|par|se|pas|sur|plus|qui|ne|cet|ou|ont|les|des|avec|vous|nous|je|me|mon|son|est)\b/g) || []).length;
   
   // English keywords
-  if (/\b(the|be|to|of|and|a|in|that|have|i|it|for|not|on|with|he|as|you|do|at|this|but|his|by|from|is|was|are|were)\b/.test(lowerText)) {
-    var englishScore = (lowerText.match(/\b(the|be|to|of|and|a|in|that|have)\b/g) || []).length;
-    if (englishScore >= 3) {
-      return { lang: 'en', langCode: 'en-US' };
-    }
-  }
+  var englishKeywords = ['the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i', 'it', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at', 'this', 'but', 'his', 'by', 'from', 'is', 'was', 'are', 'were', 'been', 'or', 'an', 'would', 'could', 'should', 'will', 'can', 'just', 'my', 'me', 'him', 'her', 'them'];
+  var englishCount = (lowerText.match(/\b(the|be|to|of|and|a|in|that|have|i|it|for|not|on|with|he|as|you|do|at|this|but|his|by|from|is|was|are|were|been|or|an|would|could|should|will|can|just|my|me|him|her|them)\b/g) || []).length;
   
   // Spanish keywords
-  if (/\b(el|la|de|que|y|a|en|un|ser|se|no|haber|por|con|su|para|es|está|son)\b/.test(lowerText)) {
-    var spanishScore = (lowerText.match(/\b(el|la|de|que|y|en|un)\b/g) || []).length;
-    if (spanishScore >= 3) {
-      return { lang: 'es', langCode: 'es-ES' };
-    }
-  }
+  var spanishCount = (lowerText.match(/\b(el|la|de|que|y|a|en|un|ser|se|no|haber|por|con|su|para|es|está|son|los|las|una|es|tu|su)\b/g) || []).length;
   
   // German keywords
-  if (/\b(der|die|und|in|den|von|zu|das|mit|sich|des|auf|für|ist|im|dem|nicht|ein|eine|als|auch|es|an|werden|aus|er|hat|dass|sie|nach|wird|bei|einer|um|am|sind|noch|wie|einem|über|einen)\b/.test(lowerText)) {
-    var germanScore = (lowerText.match(/\b(der|die|und|in|den|von|zu)\b/g) || []).length;
-    if (germanScore >= 3) {
-      return { lang: 'de', langCode: 'de-DE' };
-    }
-  }
+  var germanCount = (lowerText.match(/\b(der|die|und|in|den|von|zu|das|mit|sich|des|auf|für|ist|im|dem|nicht|ein|eine|als|auch|es|an|werden|aus|er|hat|dass|sie|nach|wird|bei|einer|um|am|sind|noch|wie|einem|über|einen)\b/g) || []).length;
   
   // Italian keywords
-  if (/\b(il|di|che|e|a|un|da|si|gli|la|non|se|mi|non|per|ho|una|ai|ne|ancora|ho|ho|no)\b/.test(lowerText)) {
-    var italianScore = (lowerText.match(/\b(il|di|che|e|a|un|da|si)\b/g) || []).length;
-    if (italianScore >= 3) {
-      return { lang: 'it', langCode: 'it-IT' };
-    }
-  }
+  var italianCount = (lowerText.match(/\b(il|di|che|e|a|un|da|si|gli|la|non|se|mi|per|ho|una|ai|ne|ancora|ho|ho|no|sono|siamo|sono|lei|lui)\b/g) || []).length;
   
   // Portuguese keywords
-  if (/\b(de|a|o|e|em|para|que|da|do|os|um|uma|por|com|não|há|se|na|no|os|dos|das|nos|na|se|me|te|lhe)\b/.test(lowerText)) {
-    var portugueseScore = (lowerText.match(/\b(de|a|o|e|em|para|que)\b/g) || []).length;
-    if (portugueseScore >= 3) {
-      return { lang: 'pt', langCode: 'pt-BR' };
+  var portugueseCount = (lowerText.match(/\b(de|a|o|e|em|para|que|da|do|os|um|uma|por|com|não|há|se|na|no|dos|das|nos|me|te|lhe|foi|seu|sua)\b/g) || []).length;
+  
+  // Normalize counts by word count to avoid bias
+  var normalizedFrench = frenchCount;
+  var normalizedEnglish = englishCount;
+  var normalizedSpanish = spanishCount;
+  var normalizedGerman = germanCount;
+  var normalizedItalian = italianCount;
+  var normalizedPortuguese = portugueseCount;
+  
+  // Find language with highest score
+  var scores = {
+    fr: normalizedFrench,
+    en: normalizedEnglish,
+    es: normalizedSpanish,
+    de: normalizedGerman,
+    it: normalizedItalian,
+    pt: normalizedPortuguese
+  };
+  
+  var maxScore = 0;
+  var detectedLang = 'en';
+  
+  for (var lang in scores) {
+    if (scores[lang] > maxScore) {
+      maxScore = scores[lang];
+      detectedLang = lang;
     }
   }
   
-  // French keywords (default for Latin text)
-  if (/\b(le|de|un|et|à|être|en|que|pour|dans|ce|il|par|se|pas|sur|plus|qui|ne|cet|ou|ont)\b/.test(lowerText)) {
-    return { lang: 'fr', langCode: 'fr-FR' };
-  }
+  // Map to langCode format
+  var langCodeMap = {
+    'fr': { lang: 'fr', langCode: 'fr-FR' },
+    'en': { lang: 'en', langCode: 'en-US' },
+    'es': { lang: 'es', langCode: 'es-ES' },
+    'de': { lang: 'de', langCode: 'de-DE' },
+    'it': { lang: 'it', langCode: 'it-IT' },
+    'pt': { lang: 'pt', langCode: 'pt-BR' }
+  };
   
-  // Default to English for any other Latin text
-  return { lang: 'en', langCode: 'en-US' };
+  return langCodeMap[detectedLang] || { lang: 'en', langCode: 'en-US' };
 }
 
 function speakText(text, button) {

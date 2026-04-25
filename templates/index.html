@@ -2864,11 +2864,14 @@ function addSpeakButton(bubble, aiText) {
   var speakBtn = document.createElement('button');
   speakBtn.className = 'speak-btn';
   speakBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-  speakBtn.title = 'Écouter la réponse';
+  speakBtn.title = 'Écouter';
+  speakBtn.type = 'button';
+  
   speakBtn.onclick = function(e) {
     e.preventDefault();
     e.stopPropagation();
-    speakText(plainText, speakBtn);
+    console.log('[SPEAK] Button clicked');
+    window.speakTextFunction(plainText, speakBtn);
   };
   
   buttonContainer.appendChild(speakBtn);
@@ -2878,6 +2881,10 @@ function addSpeakButton(bubble, aiText) {
 function detectLanguage(text) {
   // Language detection based on script and keywords
   // Returns: {lang: 'xx', langCode: 'xx-XX'}
+  
+  if (!text || text.length === 0) {
+    return { lang: 'en', langCode: 'en-US' };
+  }
   
   // Check for non-Latin scripts first (more reliable)
   
@@ -2903,7 +2910,6 @@ function detectLanguage(text) {
   
   // Chinese - Han characters (4E00-9FFF)
   if (/[\u4E00-\u9FFF]/.test(text)) {
-    // Simplified Chinese is more common
     return { lang: 'zh-CN', langCode: 'zh-CN' };
   }
   
@@ -2933,7 +2939,7 @@ function detectLanguage(text) {
   // English keywords
   if (/\b(the|be|to|of|and|a|in|that|have|i|it|for|not|on|with|he|as|you|do|at|this|but|his|by|from|is|was|are|were)\b/.test(lowerText)) {
     var englishScore = (lowerText.match(/\b(the|be|to|of|and|a|in|that|have)\b/g) || []).length;
-    if (englishScore >= 3) {
+    if (englishScore >= 2) {
       return { lang: 'en', langCode: 'en-US' };
     }
   }
@@ -2941,7 +2947,7 @@ function detectLanguage(text) {
   // Spanish keywords
   if (/\b(el|la|de|que|y|a|en|un|ser|se|no|haber|por|con|su|para|es|está|son)\b/.test(lowerText)) {
     var spanishScore = (lowerText.match(/\b(el|la|de|que|y|en|un)\b/g) || []).length;
-    if (spanishScore >= 3) {
+    if (spanishScore >= 2) {
       return { lang: 'es', langCode: 'es-ES' };
     }
   }
@@ -2949,28 +2955,28 @@ function detectLanguage(text) {
   // German keywords
   if (/\b(der|die|und|in|den|von|zu|das|mit|sich|des|auf|für|ist|im|dem|nicht|ein|eine|als|auch|es|an|werden|aus|er|hat|dass|sie|nach|wird|bei|einer|um|am|sind|noch|wie|einem|über|einen)\b/.test(lowerText)) {
     var germanScore = (lowerText.match(/\b(der|die|und|in|den|von|zu)\b/g) || []).length;
-    if (germanScore >= 3) {
+    if (germanScore >= 2) {
       return { lang: 'de', langCode: 'de-DE' };
     }
   }
   
   // Italian keywords
-  if (/\b(il|di|che|e|a|un|da|si|gli|la|non|se|mi|non|per|ho|una|ai|ne|ancora|ho|ho|no)\b/.test(lowerText)) {
+  if (/\b(il|di|che|e|a|un|da|si|gli|la|non|se|mi|non|per|ho|una|ai|ne|ancora|ho|no)\b/.test(lowerText)) {
     var italianScore = (lowerText.match(/\b(il|di|che|e|a|un|da|si)\b/g) || []).length;
-    if (italianScore >= 3) {
+    if (italianScore >= 2) {
       return { lang: 'it', langCode: 'it-IT' };
     }
   }
   
   // Portuguese keywords
-  if (/\b(de|a|o|e|em|para|que|da|do|os|um|uma|por|com|não|há|se|na|no|os|dos|das|nos|na|se|me|te|lhe)\b/.test(lowerText)) {
+  if (/\b(de|a|o|e|em|para|que|da|do|os|um|uma|por|com|não|há|se|na|no|os|dos|das|nos|se|me|te|lhe)\b/.test(lowerText)) {
     var portugueseScore = (lowerText.match(/\b(de|a|o|e|em|para|que)\b/g) || []).length;
-    if (portugueseScore >= 3) {
+    if (portugueseScore >= 2) {
       return { lang: 'pt', langCode: 'pt-BR' };
     }
   }
   
-  // French keywords (default for Latin text)
+  // French keywords
   if (/\b(le|de|un|et|à|être|en|que|pour|dans|ce|il|par|se|pas|sur|plus|qui|ne|cet|ou|ont)\b/.test(lowerText)) {
     return { lang: 'fr', langCode: 'fr-FR' };
   }
@@ -2978,36 +2984,57 @@ function detectLanguage(text) {
   // Default to English for any other Latin text
   return { lang: 'en', langCode: 'en-US' };
 }
+
+// Main speak function - exported to global scope
+window.speakTextFunction = function(text, button) {
+  console.log('[SPEAK] speakTextFunction called with text length:', text ? text.length : 0);
   
-  // Try gTTS API first (if available)
+  if (!text || text.length === 0) {
+    console.log('[SPEAK] No text provided');
+    return;
+  }
+  
+  // Stop current audio if playing
+  if (window._currentAudio) {
+    try {
+      window._currentAudio.pause();
+      window._currentAudio = null;
+    } catch (e) {
+      console.log('[SPEAK] Error stopping previous audio:', e);
+    }
+  }
+  
+  // Stop current speech if playing
+  if (window.speechSynthesis) {
+    try {
+      window.speechSynthesis.cancel();
+    } catch (e) {
+      console.log('[SPEAK] Error canceling speech:', e);
+    }
+  }
+  
+  if (button) {
+    button.disabled = true;
+    button.classList.add('playing');
+    window._currentSpeakBtn = button;
+  }
+  
+  // Detect language
   var langDetection = detectLanguage(text);
   var lang = langDetection.lang;
   var langCode = langDetection.langCode;
   
-  var tryGTTS = function() {
-    return fetch('/api/synthesize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: text.substring(0, 5000), lang: lang }),
-      timeout: 10000
-    })
-    .then(function(response) {
-      if (!response.ok) throw new Error('API Error: ' + response.status);
-      return response.blob();
-    })
-    .then(function(blob) {
-      playAudioBlob(blob, button);
-    });
-  };
+  console.log('[SPEAK] Detected language:', lang, langCode);
   
-  // Fallback to Web Speech API
+  // Try Web Speech API first (most reliable)
   var tryWebSpeechAPI = function() {
-    console.log('[SPEAK] Using Web Speech API as fallback for: ' + langCode);
+    console.log('[SPEAK] Trying Web Speech API');
     try {
       var synth = window.speechSynthesis;
-      if (!synth) throw new Error('Web Speech API not supported');
+      if (!synth) {
+        throw new Error('Web Speech API not available');
+      }
       
-      // Cancel any ongoing speech
       synth.cancel();
       
       var utterance = new SpeechSynthesisUtterance(text);
@@ -3017,6 +3044,7 @@ function detectLanguage(text) {
       utterance.volume = 1.0;
       
       utterance.onstart = function() {
+        console.log('[SPEAK] Speech started');
         if (button) {
           button.disabled = true;
           button.classList.add('playing');
@@ -3024,6 +3052,7 @@ function detectLanguage(text) {
       };
       
       utterance.onend = function() {
+        console.log('[SPEAK] Speech ended');
         window._currentAudio = null;
         if (button) {
           button.classList.remove('playing');
@@ -3032,36 +3061,52 @@ function detectLanguage(text) {
       };
       
       utterance.onerror = function(evt) {
-        console.error('[SPEAK] Error:', evt.error);
+        console.error('[SPEAK] Speech error:', evt.error);
         window._currentAudio = null;
         if (button) {
           button.classList.remove('playing');
           button.disabled = false;
-          button.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i>';
-          button.title = 'Erreur';
         }
       };
       
-      window._currentUtterance = utterance;
       synth.speak(utterance);
+      window._currentUtterance = utterance;
     } catch (e) {
-      console.error('[SPEAK] Web Speech API error:', e);
+      console.error('[SPEAK] Web Speech API failed:', e.message);
       if (button) {
         button.classList.remove('playing');
         button.disabled = false;
-        button.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i>';
-        button.title = 'Synthèse non disponible';
       }
     }
   };
   
-  // Try gTTS first, fallback to Web Speech API
-  tryGTTS()
+  // Try gTTS API (server-side)
+  var tryGTTS = function() {
+    console.log('[SPEAK] Trying gTTS API');
+    fetch('/api/synthesize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text.substring(0, 5000), lang: lang }),
+      timeout: 5000
+    })
+    .then(function(response) {
+      console.log('[SPEAK] API response:', response.status);
+      if (!response.ok) throw new Error('API Error: ' + response.status);
+      return response.blob();
+    })
+    .then(function(blob) {
+      console.log('[SPEAK] Got blob, size:', blob.size);
+      playAudioBlobFunction(blob, button);
+    })
     .catch(function(err) {
-      console.log('[SPEAK] gTTS failed, trying Web Speech API:', err.message);
+      console.log('[SPEAK] gTTS failed, fallback to Web Speech API:', err.message);
       tryWebSpeechAPI();
     });
-}
+  };
+  
+  // Try gTTS first (better quality), fallback to Web Speech
+  tryGTTS();
+};
 
 function playAudioBlob(blob, button) {
   console.log('[SPEAK] Playing audio blob');
@@ -3119,6 +3164,9 @@ function playAudioBlob(blob, button) {
     }
   }
 }
+
+// Alias for use in window scope
+var playAudioBlobFunction = playAudioBlob;
 
 window.sendMessage = sendMessage;
 

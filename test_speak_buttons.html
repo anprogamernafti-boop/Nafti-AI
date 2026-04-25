@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Speak Buttons</title>
+    <script>
+        // Copy of the speak functions from index.html for testing
+        
+        function detectLanguage(text) {
+            if (!text || text.length === 0) {
+                return { lang: 'en', langCode: 'en-US' };
+            }
+            // Arabic
+            if (/[\u0600-\u06FF]/.test(text)) {
+                return { lang: 'ar', langCode: 'ar-SA' };
+            }
+            // Russian/Cyrillic
+            if (/[\u0400-\u04FF]/.test(text)) {
+                return { lang: 'ru', langCode: 'ru-RU' };
+            }
+            // Default English
+            return { lang: 'en', langCode: 'en-US' };
+        }
+
+        window.speakTextFunction = function(text, button) {
+            console.log('[SPEAK] speakTextFunction called');
+            console.log('[SPEAK] Text:', text);
+            console.log('[SPEAK] Button:', button);
+            
+            if (!text || text.length === 0) {
+                console.log('[SPEAK] No text');
+                return;
+            }
+            
+            var langDetection = detectLanguage(text);
+            console.log('[SPEAK] Detected language:', langDetection);
+            
+            if (button) {
+                button.disabled = true;
+                button.classList.add('playing');
+            }
+        };
+
+        function addSpeakButton(bubble, aiText) {
+            console.log('[TEST] addSpeakButton called with text:', aiText);
+            
+            if (!bubble) return;
+            
+            var plainText = aiText; // simplified for test
+            if (!plainText || plainText.length === 0) return;
+            
+            var buttonContainer = document.createElement('div');
+            buttonContainer.style.marginTop = '8px';
+            
+            var speakBtn = document.createElement('button');
+            speakBtn.className = 'speak-btn';
+            speakBtn.innerHTML = '🔊 Speak';
+            speakBtn.type = 'button';
+            
+            speakBtn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('[TEST] Button clicked!');
+                window.speakTextFunction(plainText, speakBtn);
+            };
+            
+            buttonContainer.appendChild(speakBtn);
+            bubble.appendChild(buttonContainer);
+        }
+    </script>
+    <style>
+        .speak-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .speak-btn.playing {
+            background: #e74c3c;
+            animation: pulse-speaker 1.5s infinite;
+        }
+        .speak-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        @keyframes pulse-speaker {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Speak Buttons</h1>
+    <div id="test-bubble"></div>
+    
+    <script>
+        var testBubble = document.getElementById('test-bubble');
+        addSpeakButton(testBubble, 'Hello, this is a test message.');
+        console.log('[TEST] Button added successfully');
+    </script>
+</body>
+</html>

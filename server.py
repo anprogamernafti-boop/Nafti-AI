@@ -106,12 +106,17 @@ def verify_password(password, password_hash):
     return hash_password(password) == password_hash
 
 def detect_language(text):
-    """Detect language using langdetect library"""
+    """Detect language using langdetect library and script heuristics."""
     if not text or not text.strip():
         return "en"
-    
+
+    stripped_text = text.strip()
+    # If Arabic script is present, prefer Arabic immediately
+    if re.search(r"[\u0600-\u06FF]", stripped_text):
+        return "ar"
+
     try:
-        lang_code = detect(text.strip())
+        lang_code = detect(stripped_text)
         return lang_code
     except LangDetectException:
         # If detection fails, default to English
@@ -230,11 +235,26 @@ def detect_tunisian_dialect(text):
 
 def get_language_instruction(lang_code, prompt_text=None):
     """Get the appropriate language instruction for the detected language"""
-    tunisian_dialect = detect_tunisian_dialect(prompt_text)
-    if tunisian_dialect == "ar":
-        return "Répondez en arabe tunisien authentique (derja), comme un Tunisien qui parle naturellement. Utilisez des expressions tunisiennes courantes comme 'شنية', 'بالحق', 'يزي', 'بربي', 'ما نعرفش', 'كتير', 'شوية', 'ماشي', 'تمام', 'إنشاء الله', 'ياخي', 'ربي', etc. Soyez amical et utilisez le style de conversation tunisien naturel."
-    if tunisian_dialect == "fr":
-        return "Répondez en français tunisien authentique (derja), comme un Tunisien qui parle naturellement. Utilisez des expressions tunisiennes courantes comme 'chwaya', 'ya3ni', 'tawa', 'barcha', 'mouch', 'kifech', 'chnowa', 'sahha', 'beldi', 'hakka', 'nchallah', 'ma nhebch', 'fik', 'slama', 'barsha', etc. Soyez amical et utilisez le style de conversation tunisien naturel."
+    # For Arabic, only use Tunisian dialect if there are specific Tunisian terms
+    if lang_code == "ar" and prompt_text:
+        tunisian_dialect = detect_tunisian_dialect(prompt_text)
+        if tunisian_dialect == "ar":
+            # Check if it contains specific Tunisian terms (not just common Arabic)
+            specific_tunisian_terms = [
+                'شنية', 'شكون', 'بالحق', 'يزي', 'بربي', 'ما نعرفش', 'كتير', 'شوية',
+                'ماشي', 'تمام', 'إنشاء الله', 'ياخي', 'ربي', 'حاجة', 'تنجم', 'تعمل',
+                'تفهم', 'تقول', 'توا', 'صحيت', 'عاوني', 'شيم', 'موش', 'عسلامة',
+                'كيفاش', 'شخبارك', 'إزيك', 'الحمد لله', 'بخير', 'شنو', 'شنية'
+            ]
+            has_specific_tunisian = any(term in prompt_text for term in specific_tunisian_terms)
+            if has_specific_tunisian:
+                return "Répondez en arabe tunisien authentique (derja), comme un Tunisien qui parle naturellement. Utilisez des expressions tunisiennes courantes comme 'شنية', 'بالحق', 'يزي', 'بربي', 'ما نعرفش', 'كتير', 'شوية', 'ماشي', 'تمام', 'إنشاء الله', 'ياخي', 'ربي', etc. Soyez amical et utilisez le style de conversation tunisien naturel."
+
+    # For French, check for Tunisian dialect
+    if lang_code == "fr" and prompt_text:
+        tunisian_dialect = detect_tunisian_dialect(prompt_text)
+        if tunisian_dialect == "fr":
+            return "Répondez en français tunisien authentique (derja), comme un Tunisien qui parle naturellement. Utilisez des expressions tunisiennes courantes comme 'chwaya', 'ya3ni', 'tawa', 'barcha', 'mouch', 'kifech', 'chnowa', 'sahha', 'beldi', 'hakka', 'nchallah', 'ma nhebch', 'fik', 'slama', 'barsha', etc. Soyez amical et utilisez le style de conversation tunisien naturel."
 
     instructions = {
         "fr": "Répondez en français.",

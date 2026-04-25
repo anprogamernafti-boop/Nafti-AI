@@ -2875,60 +2875,207 @@ function addSpeakButton(bubble, aiText) {
   bubble.appendChild(buttonContainer);
 }
 
-function speakText(text, button) {
-  if (!text || text.length === 0) return;
+function detectLanguage(text) {
+  // Language detection based on script and keywords
+  // Returns: {lang: 'xx', langCode: 'xx-XX'}
   
-  // Stop current audio if playing
-  if (window._currentAudio) {
-    window._currentAudio.pause();
-    window._currentAudio = null;
-    if (window._currentSpeakBtn) {
-      window._currentSpeakBtn.classList.remove('playing');
-      window._currentSpeakBtn.disabled = false;
+  // Check for non-Latin scripts first (more reliable)
+  
+  // Arabic (0600-06FF)
+  if (/[\u0600-\u06FF]/.test(text)) {
+    return { lang: 'ar', langCode: 'ar-SA' };
+  }
+  
+  // Russian/Cyrillic (0400-04FF)
+  if (/[\u0400-\u04FF]/.test(text)) {
+    return { lang: 'ru', langCode: 'ru-RU' };
+  }
+  
+  // Greek (0370-03FF)
+  if (/[\u0370-\u03FF]/.test(text)) {
+    return { lang: 'el', langCode: 'el-GR' };
+  }
+  
+  // Hebrew (0590-05FF)
+  if (/[\u0590-\u05FF]/.test(text)) {
+    return { lang: 'he', langCode: 'he-IL' };
+  }
+  
+  // Chinese - Han characters (4E00-9FFF)
+  if (/[\u4E00-\u9FFF]/.test(text)) {
+    // Simplified Chinese is more common
+    return { lang: 'zh-CN', langCode: 'zh-CN' };
+  }
+  
+  // Japanese - Hiragana (3040-309F) or Katakana (30A0-30FF)
+  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) {
+    return { lang: 'ja', langCode: 'ja-JP' };
+  }
+  
+  // Korean (AC00-D7AF)
+  if (/[\uAC00-\uD7AF]/.test(text)) {
+    return { lang: 'ko', langCode: 'ko-KR' };
+  }
+  
+  // Thai (0E00-0E7F)
+  if (/[\u0E00-\u0E7F]/.test(text)) {
+    return { lang: 'th', langCode: 'th-TH' };
+  }
+  
+  // Vietnamese (uses Latin + diacritics)
+  if (/[ăâêôơư]/.test(text)) {
+    return { lang: 'vi', langCode: 'vi-VN' };
+  }
+  
+  // For Latin-based languages, use keyword detection
+  var lowerText = text.toLowerCase().substring(0, 500);
+  
+  // English keywords
+  if (/\b(the|be|to|of|and|a|in|that|have|i|it|for|not|on|with|he|as|you|do|at|this|but|his|by|from|is|was|are|were)\b/.test(lowerText)) {
+    var englishScore = (lowerText.match(/\b(the|be|to|of|and|a|in|that|have)\b/g) || []).length;
+    if (englishScore >= 3) {
+      return { lang: 'en', langCode: 'en-US' };
     }
   }
   
-  if (button) {
-    button.disabled = true;
-    button.classList.add('playing');
-    window._currentSpeakBtn = button;
+  // Spanish keywords
+  if (/\b(el|la|de|que|y|a|en|un|ser|se|no|haber|por|con|su|para|es|está|son)\b/.test(lowerText)) {
+    var spanishScore = (lowerText.match(/\b(el|la|de|que|y|en|un)\b/g) || []).length;
+    if (spanishScore >= 3) {
+      return { lang: 'es', langCode: 'es-ES' };
+    }
   }
   
-  // Detect language from the text
-  var lang = 'fr';  // Default to French
+  // German keywords
+  if (/\b(der|die|und|in|den|von|zu|das|mit|sich|des|auf|für|ist|im|dem|nicht|ein|eine|als|auch|es|an|werden|aus|er|hat|dass|sie|nach|wird|bei|einer|um|am|sind|noch|wie|einem|über|einen)\b/.test(lowerText)) {
+    var germanScore = (lowerText.match(/\b(der|die|und|in|den|von|zu)\b/g) || []).length;
+    if (germanScore >= 3) {
+      return { lang: 'de', langCode: 'de-DE' };
+    }
+  }
+  
+  // Italian keywords
+  if (/\b(il|di|che|e|a|un|da|si|gli|la|non|se|mi|non|per|ho|una|ai|ne|ancora|ho|ho|no)\b/.test(lowerText)) {
+    var italianScore = (lowerText.match(/\b(il|di|che|e|a|un|da|si)\b/g) || []).length;
+    if (italianScore >= 3) {
+      return { lang: 'it', langCode: 'it-IT' };
+    }
+  }
+  
+  // Portuguese keywords
+  if (/\b(de|a|o|e|em|para|que|da|do|os|um|uma|por|com|não|há|se|na|no|os|dos|das|nos|na|se|me|te|lhe)\b/.test(lowerText)) {
+    var portugueseScore = (lowerText.match(/\b(de|a|o|e|em|para|que)\b/g) || []).length;
+    if (portugueseScore >= 3) {
+      return { lang: 'pt', langCode: 'pt-BR' };
+    }
+  }
+  
+  // French keywords (default for Latin text)
+  if (/\b(le|de|un|et|à|être|en|que|pour|dans|ce|il|par|se|pas|sur|plus|qui|ne|cet|ou|ont)\b/.test(lowerText)) {
+    return { lang: 'fr', langCode: 'fr-FR' };
+  }
+  
+  // Default to English for any other Latin text
+  return { lang: 'en', langCode: 'en-US' };
+}
+  
+  // Try gTTS API first (if available)
+  var langDetection = detectLanguage(text);
+  var lang = langDetection.lang;
+  var langCode = langDetection.langCode;
+  
+  var tryGTTS = function() {
+    return fetch('/api/synthesize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text.substring(0, 5000), lang: lang }),
+      timeout: 10000
+    })
+    .then(function(response) {
+      if (!response.ok) throw new Error('API Error: ' + response.status);
+      return response.blob();
+    })
+    .then(function(blob) {
+      playAudioBlob(blob, button);
+    });
+  };
+  
+  // Fallback to Web Speech API
+  var tryWebSpeechAPI = function() {
+    console.log('[SPEAK] Using Web Speech API as fallback for: ' + langCode);
+    try {
+      var synth = window.speechSynthesis;
+      if (!synth) throw new Error('Web Speech API not supported');
+      
+      // Cancel any ongoing speech
+      synth.cancel();
+      
+      var utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = langCode;
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      
+      utterance.onstart = function() {
+        if (button) {
+          button.disabled = true;
+          button.classList.add('playing');
+        }
+      };
+      
+      utterance.onend = function() {
+        window._currentAudio = null;
+        if (button) {
+          button.classList.remove('playing');
+          button.disabled = false;
+        }
+      };
+      
+      utterance.onerror = function(evt) {
+        console.error('[SPEAK] Error:', evt.error);
+        window._currentAudio = null;
+        if (button) {
+          button.classList.remove('playing');
+          button.disabled = false;
+          button.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i>';
+          button.title = 'Erreur';
+        }
+      };
+      
+      window._currentUtterance = utterance;
+      synth.speak(utterance);
+    } catch (e) {
+      console.error('[SPEAK] Web Speech API error:', e);
+      if (button) {
+        button.classList.remove('playing');
+        button.disabled = false;
+        button.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i>';
+        button.title = 'Synthèse non disponible';
+      }
+    }
+  };
+  
+  // Try gTTS first, fallback to Web Speech API
+  tryGTTS()
+    .catch(function(err) {
+      console.log('[SPEAK] gTTS failed, trying Web Speech API:', err.message);
+      tryWebSpeechAPI();
+    });
+}
+
+function playAudioBlob(blob, button) {
+  console.log('[SPEAK] Playing audio blob');
   try {
-    // Simple language detection
-    if (/[\u0600-\u06FF]/.test(text)) {  // Arabic script
-      lang = 'ar';
-    } else if (/[\u0410-\u044F]/.test(text)) {  // Cyrillic
-      lang = 'ru';
-    } else if (/[\u4E00-\u9FA5]/.test(text)) {  // Chinese
-      lang = 'zh-CN';
-    } else if (/[\u3040-\u309F]/.test(text)) {  // Hiragana
-      lang = 'ja';
-    } else if (/[\uAC00-\uD7A3]/.test(text)) {  // Korean
-      lang = 'ko';
-    } else if (/[\u0E00-\u0E7F]/.test(text)) {  // Thai
-      lang = 'th';
-    }
-  } catch (e) {
-    // Default to French if detection fails
-  }
-  
-  // Call the API endpoint
-  fetch('/api/synthesize', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: text.substring(0, 5000), lang: lang })
-  })
-  .then(function(response) {
-    if (!response.ok) throw new Error('Erreur API: ' + response.status);
-    return response.blob();
-  })
-  .then(function(blob) {
     var url = URL.createObjectURL(blob);
     var audio = new Audio(url);
     window._currentAudio = audio;
+    
+    audio.onplay = function() {
+      if (button) {
+        button.disabled = true;
+        button.classList.add('playing');
+      }
+    };
     
     audio.onended = function() {
       window._currentAudio = null;
@@ -2939,7 +3086,8 @@ function speakText(text, button) {
       URL.revokeObjectURL(url);
     };
     
-    audio.onerror = function() {
+    audio.onerror = function(e) {
+      console.error('[SPEAK] Audio error:', e);
       window._currentAudio = null;
       if (button) {
         button.classList.remove('playing');
@@ -2951,7 +3099,7 @@ function speakText(text, button) {
     };
     
     audio.play().catch(function(err) {
-      console.error('Erreur de lecture audio:', err);
+      console.error('[SPEAK] Play error:', err);
       window._currentAudio = null;
       if (button) {
         button.classList.remove('playing');
@@ -2961,17 +3109,15 @@ function speakText(text, button) {
       }
       URL.revokeObjectURL(url);
     });
-  })
-  .catch(function(err) {
-    console.error('Erreur synthèse vocale:', err);
-    window._currentAudio = null;
+  } catch (e) {
+    console.error('[SPEAK] Blob playback error:', e);
     if (button) {
       button.classList.remove('playing');
       button.disabled = false;
       button.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i>';
-      button.title = 'Erreur de synthèse';
+      button.title = 'Erreur';
     }
-  });
+  }
 }
 
 window.sendMessage = sendMessage;

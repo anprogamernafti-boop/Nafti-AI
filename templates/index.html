@@ -96,6 +96,11 @@ color: var(--text-primary);
 display: flex;
 flex-direction: column;
 height: 100dvh;
+/* iOS Safari fix for 100dvh */
+height: 100vh;
+@supports (height: 100dvh) {
+    height: 100dvh;
+}
 position: relative;
 -webkit-font-smoothing: antialiased;
 }
@@ -1790,7 +1795,186 @@ transform: translateY(-1px);
   input[type="password"],
   textarea,
   select { font-size: 16px !important; }
-</style>
+
+  /* ── Page Transitions ── */
+  body.page-exit {
+    animation: pageExit 0.4s cubic-bezier(0.4, 0, 1, 1) forwards;
+  }
+
+  @keyframes pageExit {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  @keyframes pageEnter {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .chat-area {
+    animation: pageEnter 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ── Improved Focus-Visible for Keyboard Navigation ── */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .header-btn:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .suggestion-chip:focus-visible,
+  .send-btn:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ── Toast Notifications ── */
+  .toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    pointer-events: none;
+  }
+
+  .toast {
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: toastSlideIn 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: all;
+    max-width: 360px;
+  }
+
+  @keyframes toastSlideIn {
+    from { transform: translateX(400px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  @keyframes toastSlideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(400px); opacity: 0; }
+  }
+
+  .toast.exit { animation: toastSlideOut 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+  .toast-success {
+    background: #10b981;
+    color: white;
+  }
+
+  .toast-error {
+    background: #ef4444;
+    color: white;
+  }
+
+  .toast-info {
+    background: #3b82f6;
+    color: white;
+  }
+
+  .toast-warning {
+    background: #f59e0b;
+    color: white;
+  }
+
+  .toast i {
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .toast-close {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  }
+
+  .toast-close:hover { opacity: 1; }
+
+  /* ── Copy Code Button ── */
+  .message-bubble pre {
+    position: relative;
+  }
+
+  .copy-code-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 6px 12px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .message-bubble pre:hover .copy-code-btn { opacity: 1; }
+  .copy-code-btn:hover { background: var(--accent-light); }
+  .copy-code-btn:active { transform: scale(0.95); }
+
+  /* ── Export/Share Buttons ── */
+  .session-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .session-action-btn {
+    padding: 8px 14px;
+    border-radius: var(--radius-md);
+    border: 1.5px solid var(--border);
+    background: var(--bg-chat);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .session-action-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+  }
+
+  @media (max-width: 600px) {
+    .toast-container { top: 12px; right: 12px; }
+    .toast { max-width: calc(100vw - 32px); }
+  }</style>
 </head>
 <body>
 <!-- Intro Splash Screen -->
@@ -1893,16 +2077,16 @@ transform: translateY(-1px);
 <p><span class="status-dot"></span>En ligne &middot; Pr&ecirc;t &agrave; r&eacute;pondre</p>
 </div>
 <div class="header-actions">
-<button class="header-btn" id="homeBtn" title="Retour &agrave; l'accueil">
+<button class="header-btn" id="homeBtn" title="Retour &agrave; l'accueil" aria-label="Retour à l'accueil">
 <i class="fa-solid fa-house"></i>
 </button>
-<button class="header-btn" id="historyBtn" title="Historique des conversations">
+<button class="header-btn" id="historyBtn" title="Historique des conversations" aria-label="Historique des conversations">
 <i class="fa-solid fa-clock-rotate-left"></i>
 </button>
-<button class="header-btn" id="themeToggleBtn" title="Changer de th&egrave;me">
+<button class="header-btn" id="themeToggleBtn" title="Changer de th&egrave;me" aria-label="Changer de thème">
 <i class="fa-solid fa-moon" id="themeIcon"></i>
 </button>
-<button class="header-btn" id="settingsBtn" title="Param&egrave;tres">
+<button class="header-btn" id="settingsBtn" title="Param&egrave;tres" aria-label="Paramètres">
 <i class="fa-solid fa-gear"></i>
 </button>
 <button class="header-btn accent-btn" id="imageGenBtn" title="G&eacute;n&eacute;rer une image (IA)">
@@ -1974,10 +2158,10 @@ transform: translateY(-1px);
 <!-- items inserted dynamically -->
 </div>
 <div class="input-wrapper">
-<button class="attach-btn" id="attachBtn" title="Ajouter une pi&egrave;ce jointe">
+<button class="attach-btn" id="attachBtn" title="Ajouter une pi&egrave;ce jointe" aria-label="Ajouter une pièce jointe">
 <i class="fa-solid fa-plus"></i>
 </button>
-<button class="voice-btn" id="voiceBtn" title="Reconnaissance vocale">
+<button class="voice-btn" id="voiceBtn" title="Reconnaissance vocale" aria-label="Reconnaissance vocale">
 <i class="fa-solid fa-microphone"></i>
 </button>
 
@@ -2031,6 +2215,9 @@ transform: translateY(-1px);
 <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
 <div class="powered-by">Propuls&eacute; par l'intelligence artificielle</div>
 </div>
+
+<!-- Toast Notification Container -->
+<div class="toast-container" id="toastContainer"></div>
 
 <!-- PWA Install Banner -->
 <div class="install-banner" id="installBanner">
@@ -2815,6 +3002,7 @@ try {
 var aiText = await callAI(messages, imagesBase64);
 if (currentAIBubble) {
 currentAIBubble.innerHTML = parseMarkdown(aiText);
+addCopyButtonsToCodeBlocks(currentAIBubble);  // Add copy buttons to code blocks
 addRetryButton(currentAIBubble);
 addSpeakButton(currentAIBubble, aiText);
 window.conversationHistory.push({ role: 'assistant', content: aiText });
@@ -3383,6 +3571,149 @@ fetch('/api/session/' + sessionParam)
 }
 });
 })();
+
+// ========== Toast Notifications System ==========
+function showToast(message, type = 'info', duration = 3000) {
+  var container = document.getElementById('toastContainer');
+  if (!container) return;
+
+  var toast = document.createElement('div');
+  toast.className = 'toast toast-' + type;
+  
+  var iconMap = {
+    'success': 'fa-check-circle',
+    'error': 'fa-exclamation-circle',
+    'info': 'fa-info-circle',
+    'warning': 'fa-exclamation-triangle'
+  };
+  
+  var icon = document.createElement('i');
+  icon.className = 'fa-solid ' + (iconMap[type] || 'fa-info-circle');
+  
+  var text = document.createElement('span');
+  text.textContent = message;
+  
+  toast.appendChild(icon);
+  toast.appendChild(text);
+  
+  container.appendChild(toast);
+  
+  // Vibration feedback on mobile if success/error
+  if (type === 'success' && navigator.vibrate) navigator.vibrate(50);
+  if (type === 'error' && navigator.vibrate) navigator.vibrate([100, 50, 100]);
+  
+  setTimeout(function() {
+    toast.classList.add('exit');
+    setTimeout(function() { toast.remove(); }, 300);
+  }, duration);
+}
+
+// ========== Copy Code Button Functionality ==========
+function addCopyButtonsToCodeBlocks(bubble) {
+  if (!bubble) return;
+  
+  var preBlocks = bubble.querySelectorAll('pre');
+  preBlocks.forEach(function(pre) {
+    // Check if button already exists
+    if (pre.querySelector('.copy-code-btn')) return;
+    
+    var button = document.createElement('button');
+    button.className = 'copy-code-btn';
+    button.type = 'button';
+    button.innerHTML = '<i class="fa-solid fa-copy"></i> Copier';
+    button.onclick = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      var code = pre.querySelector('code');
+      if (code) {
+        var text = code.textContent;
+        navigator.clipboard.writeText(text).then(function() {
+          button.innerHTML = '<i class="fa-solid fa-check"></i> Copié!';
+          showToast('Code copié au presse-papiers', 'success', 2000);
+          if (navigator.vibrate) navigator.vibrate(20);
+          setTimeout(function() {
+            button.innerHTML = '<i class="fa-solid fa-copy"></i> Copier';
+          }, 2000);
+        }).catch(function(err) {
+          console.error('Copy failed:', err);
+          showToast('Erreur lors de la copie', 'error');
+        });
+      }
+    };
+    
+    pre.style.position = 'relative';
+    pre.appendChild(button);
+  });
+}
+
+// ========== Export/Share Conversation ==========
+window.exportConversation = function(format) {
+  if (!window.currentSessionId) {
+    showToast('Aucune conversation à exporter', 'warning');
+    return;
+  }
+  
+  fetch('/api/export', {
+    method: 'POST',
+    body: JSON.stringify({
+      session_id: window.currentSessionId,
+      format: format
+    }),
+    headers: { 'Content-Type': 'application/json' }
+  })
+  .then(function(response) {
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
+  })
+  .then(function(blob) {
+    var downloadUrl = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = 'conversation_' + new Date().getTime() + '.' + format;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(downloadUrl);
+    showToast(format.toUpperCase() + ' téléchargé avec succès', 'success');
+  })
+  .catch(function(err) {
+    console.error('Export error:', err);
+    showToast('Erreur lors de l\'export: ' + err.message, 'error');
+  });
+};
+
+window.shareConversation = function() {
+  if (!window.currentSessionId) {
+    showToast('Aucune conversation à partager', 'warning');
+    return;
+  }
+  
+  fetch('/api/share', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: window.currentSessionId })
+  })
+  .then(function(response) {
+    if (!response.ok) throw new Error('Share failed');
+    return response.json();
+  })
+  .then(function(data) {
+    var shareUrl = window.location.origin + data.share_url;
+    
+    // Copy to clipboard
+    navigator.clipboard.writeText(shareUrl).then(function() {
+      showToast('Lien de partage copié: ' + shareUrl, 'success', 4000);
+      if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
+    }).catch(function() {
+      showToast('Lien de partage: ' + shareUrl, 'info', 5000);
+    });
+  })
+  .catch(function(err) {
+    console.error('Share error:', err);
+    showToast('Erreur lors du partage: ' + err.message, 'error');
+  });
+};
 
 
 

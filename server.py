@@ -1,5 +1,6 @@
-from flask import Flask, request, jsonify, send_file, send_from_directory, redirect, url_for, render_template, flash, session
+from flask import Flask, request, jsonify, send_file, send_from_directory, redirect, url_for, render_template, flash, session, Response, stream_with_context
 from flask_cors import CORS
+from flask_compress import Compress
 from dotenv import load_dotenv
 import requests
 import os
@@ -29,7 +30,9 @@ print("[STARTUP] Flask app created")
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'supersecret')
 app.config['SESSION_TYPE'] = 'filesystem'
 CORS(app)
+Compress(app)  # Enable gzip compression
 print("[STARTUP] CORS enabled")
+print("[STARTUP] Gzip compression enabled")
 
 # File-based user storage
 USERS_FILE = Path('users.json')
@@ -1130,6 +1133,259 @@ def get_session_data(session_id):
     if not sess:
         return jsonify({"error": "Not found"}), 404
     return jsonify(sess)
+
+
+# ========== SSE Streaming Endpoint ==========
+@app.route("/api/chat/stream", methods=["POST"])
+def chat_stream():
+    """Stream AI response tokens in real-time using Server-Sent Events (SSE)"""
+    if 'user' not in session:
+        return jsonify({"error": "Login to use AI features"}), 401
+    if not GROQ_API_KEY:
+        return jsonify({"error": "Clé API Groq manquante"}), 500
+
+    data = request.get_json()
+    message = data.get("message", "").strip()
+    session_id = data.get("session_id")
+    
+    if not message:
+        return jsonify({"error": "Message requis"}), 400
+
+    user = session.get('user')
+    sess = find_session(user, session_id)
+    if not sess:
+        sess = create_session_for_user(user)
+        session_id = sess['id']
+
+    def generate():
+        try:
+            # Build messages for API
+            api_messages = sess.get('messages', [])
+            api_messages = [msg for msg in api_messages if msg.get('role') != 'system']
+            api_messages.append({"role": "user", "content": message})
+            
+            # Detect language
+            detected_lang = detect_language(message)
+            lang_instruction = get_language_instruction(detected_lang, message)
+            system_content = f"Tu es Nafti AI, un assistant intelligent et bienveillant. {lang_instruction} Utilise le format Markdown. Sois concis et utile."
+            
+            api_messages.insert(0, {"role": "system", "content": system_content})
+            
+            # Call Groq API with streaming
+            response = requests.post(
+                GROQ_URL,
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": GROQ_MODEL,
+                    "messages": api_messages,
+                    "max_tokens": 2048,
+                    "temperature": 0.7,
+                    "stream": True
+                },
+                timeout=60,
+                stream=True
+            )
+            
+            response.raise_for_status()
+            full_response = ""
+            
+            # Parse streaming response
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode('utf-8')
+                    if line.startswith('data: '):
+                        try:
+                            chunk_data = json.loads(line[6:])
+                            delta = chunk_data.get('choices', [{}])[0].get('delta', {})
+                            content = delta.get('content', '')
+                            if content:
+                                full_response += content
+                                # Send SSE event with token
+                                yield f"data: {json.dumps({'token': content, 'type': 'chunk'})}\n\n"
+                        except json.JSONDecodeError:
+                            pass
+            
+            # Save to history
+            if full_response:
+                sess['messages'].append({"role": "user", "content": message})
+                sess['messages'].append({"role": "assistant", "content": full_response})
+                if not sess.get('title') or sess.get('title') == 'Nouvelle conversation':
+                    sess['title'] = message[:80]
+                
+                histories = load_history()
+                histories[user] = histories.get(user, [])
+                for idx, s in enumerate(histories.get(user, [])):
+                    if s.get('id') == session_id:
+                        histories[user][idx] = sess
+                        break
+                save_history(histories)
+            
+            # Send completion event
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            
+        except Exception as e:
+            print(f"Stream error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream', headers={
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+        'Access-Control-Allow-Origin': '*'
+    })
+
+
+# ========== Export Conversation ==========
+@app.route("/api/export", methods=["POST"])
+def export_conversation():
+    """Export conversation as PDF or TXT"""
+    if 'user' not in session:
+        return jsonify({"error": "Login required"}), 401
+    
+    data = request.get_json()
+    session_id = data.get("session_id")
+    export_format = data.get("format", "txt")  # "txt" or "pdf"
+    
+    user = session.get('user')
+    sess = find_session(user, session_id)
+    if not sess:
+        return jsonify({"error": "Session not found"}), 404
+    
+    messages = sess.get('messages', [])
+    
+    # Format content
+    content = f"Conversation: {sess.get('title', 'Sans titre')}\n"
+    content += f"Date: {sess.get('created_at', 'N/A')}\n"
+    content += "=" * 60 + "\n\n"
+    
+    for msg in messages:
+        role = msg.get('role', '').upper()
+        text = msg.get('content', '')
+        if isinstance(text, str):
+            content += f"{role}:\n{text}\n\n"
+    
+    if export_format == "pdf":
+        try:
+            from reportlab.lib.pagesizes import letter
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from io import BytesIO
+            
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter)
+            styles = getSampleStyleSheet()
+            story = []
+            
+            # Title
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=16,
+                spaceAfter=10,
+                textColor='#0A8F94'
+            )
+            story.append(Paragraph(sess.get('title', 'Conversation'), title_style))
+            story.append(Spacer(1, 0.3 * 72 / 72))
+            
+            # Messages
+            for msg in messages:
+                role = msg.get('role', '').upper()
+                text = msg.get('content', '')
+                if isinstance(text, str):
+                    msg_style = ParagraphStyle(
+                        f'Style_{role}',
+                        parent=styles['Normal'],
+                        fontSize=10,
+                        spaceAfter=6,
+                        leftIndent=10 if role == 'USER' else 0
+                    )
+                    # Truncate very long messages for PDF
+                    display_text = text[:500] + "..." if len(text) > 500 else text
+                    story.append(Paragraph(f"<b>{role}:</b> {display_text}", msg_style))
+                    story.append(Spacer(1, 0.1 * 72 / 72))
+            
+            doc.build(story)
+            buffer.seek(0)
+            return send_file(
+                buffer,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f"conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            )
+        except ImportError:
+            return jsonify({"error": "PDF export requires reportlab"}), 400
+    else:
+        # TXT export
+        buffer = BytesIO(content.encode('utf-8'))
+        return send_file(
+            buffer,
+            mimetype='text/plain',
+            as_attachment=True,
+            download_name=f"conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        )
+
+
+# ========== Share Conversation ==========
+SHARES_FILE = Path('shares.json')
+
+def load_shares():
+    if SHARES_FILE.exists():
+        with open(SHARES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+def save_shares(data):
+    with open(SHARES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f)
+
+@app.route("/api/share", methods=["POST"])
+def share_conversation():
+    """Create a unique shareable link for a conversation"""
+    if 'user' not in session:
+        return jsonify({"error": "Login required"}), 401
+    
+    data = request.get_json()
+    session_id = data.get("session_id")
+    
+    user = session.get('user')
+    sess = find_session(user, session_id)
+    if not sess:
+        return jsonify({"error": "Session not found"}), 404
+    
+    # Generate unique share ID
+    share_id = str(uuid.uuid4())[:12]
+    
+    shares = load_shares()
+    shares[share_id] = {
+        "session": sess,
+        "user": user,
+        "created_at": datetime.now().isoformat(),
+        "title": sess.get('title', 'Sans titre')
+    }
+    save_shares(shares)
+    
+    return jsonify({
+        "share_id": share_id,
+        "share_url": f"/shared/{share_id}"
+    })
+
+
+@app.route("/shared/<share_id>")
+def view_shared_conversation(share_id):
+    """View a shared conversation"""
+    shares = load_shares()
+    share = shares.get(share_id)
+    
+    if not share:
+        return render_template("404.html"), 404
+    
+    return render_template(
+        "shared.html",
+        title=share.get('title', 'Conversation partagée'),
+        messages=share.get('session', {}).get('messages', [])
+    )
 
 
 if __name__ == "__main__":

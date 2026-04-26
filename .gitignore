@@ -28,3 +28,5 @@ Thumbs.db
 .pytest_cache/
 render-cli/
 render-cli.zip
+.venv
+.venv_old

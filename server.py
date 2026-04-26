@@ -106,102 +106,65 @@ def verify_password(password, password_hash):
     return hash_password(password) == password_hash
 
 def detect_language(text):
-    """Detect language using langdetect library and script heuristics with keyword fallback."""
+    """Détection de langue améliorée et plus précise"""
     if not text or not text.strip():
         return "en"
 
     stripped_text = text.strip()
-    
-    # If Arabic script is present, prefer Arabic immediately
-    if re.search(r"[\u0600-\u06FF]", stripped_text):
+
+    # 1. Scripts non-latins (détection instantanée et fiable)
+    if re.search(r"[\u0600-\u06FF]", stripped_text):  # Arabe
         return "ar"
-    
-    # Russian/Cyrillic
-    if re.search(r"[\u0400-\u04FF]", stripped_text):
+    if re.search(r"[\u0400-\u04FF]", stripped_text):  # Cyrillique (Russe)
         return "ru"
-    
-    # Greek
-    if re.search(r"[\u0370-\u03FF]", stripped_text):
-        return "el"
-    
-    # Hebrew
-    if re.search(r"[\u0590-\u05FF]", stripped_text):
-        return "he"
-    
-    # Chinese Han characters
-    if re.search(r"[\u4E00-\u9FFF]", stripped_text):
+    if re.search(r"[\u4E00-\u9FFF]", stripped_text):  # Chinois
         return "zh"
-    
-    # Japanese Hiragana/Katakana
-    if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", stripped_text):
+    if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", stripped_text):  # Japonais
         return "ja"
-    
-    # Korean
-    if re.search(r"[\uAC00-\uD7AF]", stripped_text):
+    if re.search(r"[\uAC00-\uD7AF]", stripped_text):  # Coréen
         return "ko"
-    
-    # Thai
-    if re.search(r"[\u0E00-\u0E7F]", stripped_text):
-        return "th"
-    
-    # Vietnamese with diacritics
-    if re.search(r"[ăâêôơư]", stripped_text):
-        return "vi"
-    
-    # Try langdetect for longer texts
+    if re.search(r"[\u0370-\u03FF]", stripped_text):  # Grec
+        return "el"
+    if re.search(r"[\u0590-\u05FF]", stripped_text):  # Hébreu
+        return "he"
+
+    # 2. Accents caractéristiques (très fiable pour les langues latines)
+    if re.search(r"[àâäçéèêëîïôöùûüÿœ]", stripped_text, flags=re.IGNORECASE):
+        return "fr"
+    if re.search(r"[ñáéíóúü¿¡]", stripped_text, flags=re.IGNORECASE):
+        return "es"
+    if re.search(r"[ãõáéíóúç]", stripped_text, flags=re.IGNORECASE):
+        return "pt"
+    if re.search(r"[äöüß]", stripped_text, flags=re.IGNORECASE):
+        return "de"
+
+    # 3. Utiliser langdetect pour les textes longs
     try:
-        # Only use langdetect if text is reasonably long
-        if len(stripped_text.split()) >= 3:  # At least 3 words
-            lang_code = detect(stripped_text)
-            return lang_code
+        if len(stripped_text.split()) >= 4:
+            detected = detect(stripped_text)
+            if detected in ['fr', 'en', 'es', 'de', 'it', 'pt', 'ru', 'ar']:
+                return detected
     except LangDetectException:
         pass
-    
-    # Fallback to keyword-based detection for short phrases
+
+    # 4. Mots-clés pour les textes courts (amélioré)
     lower_text = stripped_text.lower()
     
-    # English keywords
-    english_keywords = ['the', 'is', 'are', 'am', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'has', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'does', 'at', 'this', 'but', 'by', 'from', 'was', 'were', 'been', 'or', 'an', 'would', 'could', 'should', 'will', 'can', 'my', 'me', 'him', 'her', 'they', 'them', 'how', 'what', 'why', 'when', 'where', 'which', 'who', 'hello', 'hi', 'yes', 'no', 'please', 'thank', 'thanks', 'sorry']
-    english_count = sum(1 for word in english_keywords if re.search(r'\b' + word + r'\b', lower_text))
+    # Mots exclusivement français
+    fr_words = ['je', 'tu', 'nous', 'vous', 'ils', 'elles', 'une', 'des', 'est', 'sont', 'être', 'cette', 'celui', 'celle', 'mais', 'donc', 'aussi', 'très', 'bien', 'merci', 'bonjour', 'oui', 'comment', 'pourquoi', 'quand', 'où']
+    fr_count = sum(1 for word in fr_words if re.search(r'\b' + re.escape(word) + r'\b', lower_text))
     
-    # French keywords
-    french_keywords = ['le', 'la', 'les', 'de', 'des', 'un', 'une', 'et', 'à', 'est', 'sont', 'je', 'tu', 'il', 'elle', 'nous', 'vous', 'ils', 'elles', 'en', 'que', 'pour', 'dans', 'avec', 'c\'est', 'ce', 'ça', 'pas', 'ne', 'plus', 'qui', 'comment', 'pourquoi', 'quand', 'où', 'bonjour', 'au', 'sur', 'ou', 'mon', 'ma', 'ton', 'ta', 'son', 'sa']
-    french_count = sum(1 for word in french_keywords if re.search(r'\b' + word + r'\b', lower_text))
+    # Mots exclusivement anglais
+    en_words = ['the', 'is', 'are', 'am', 'be', 'to', 'of', 'and', 'in', 'that', 'have', 'has', 'for', 'not', 'on', 'with', 'you', 'do', 'does', 'this', 'but', 'hello', 'yes', 'no', 'thanks', 'what', 'how', 'why']
+    en_count = sum(1 for word in en_words if re.search(r'\b' + re.escape(word) + r'\b', lower_text))
     
-    # Spanish keywords
-    spanish_keywords = ['el', 'la', 'los', 'las', 'de', 'del', 'a', 'al', 'un', 'una', 'unos', 'unas', 'y', 'es', 'son', 'está', 'están', 'yo', 'tú', 'él', 'ella', 'nosotros', 'vosotros', 'ellos', 'ellas', 'que', 'para', 'por', 'con', 'en', 'hola', 'sí', 'no', 'gracias', 'por favor', 'cómo', 'por qué', 'cuándo', 'dónde', 'cuál']
-    spanish_count = sum(1 for word in spanish_keywords if re.search(r'\b' + word + r'\b', lower_text))
+    # Retourner la langue avec le plus de correspondances
+    if fr_count > en_count and fr_count >= 1:
+        return "fr"
+    if en_count > fr_count and en_count >= 1:
+        return "en"
     
-    # German keywords
-    german_keywords = ['der', 'die', 'das', 'den', 'dem', 'des', 'ein', 'eine', 'einem', 'einen', 'einer', 'eines', 'und', 'ist', 'sind', 'bin', 'bist', 'ich', 'du', 'er', 'sie', 'es', 'wir', 'ihr', 'von', 'zu', 'in', 'an', 'mit', 'auf', 'für', 'nicht', 'auch', 'wie', 'wer', 'was', 'wo', 'wann', 'warum', 'hallo']
-    german_count = sum(1 for word in german_keywords if re.search(r'\b' + word + r'\b', lower_text))
-    
-    # Italian keywords
-    italian_keywords = ['il', 'lo', 'la', 'i', 'gli', 'le', 'di', 'da', 'a', 'un', 'uno', 'una', 'e', 'è', 'sono', 'siamo', 'sei', 'io', 'tu', 'lui', 'lei', 'noi', 'voi', 'loro', 'che', 'per', 'in', 'con', 'su', 'non', 'ciao', 'grazie', 'come', 'perché', 'quando', 'dove']
-    italian_count = sum(1 for word in italian_keywords if re.search(r'\b' + word + r'\b', lower_text))
-    
-    # Portuguese keywords
-    portuguese_keywords = ['o', 'a', 'os', 'as', 'de', 'da', 'do', 'das', 'dos', 'um', 'uma', 'uns', 'umas', 'e', 'é', 'são', 'ser', 'estar', 'eu', 'tu', 'ele', 'ela', 'nós', 'vós', 'eles', 'elas', 'que', 'para', 'por', 'com', 'em', 'olá', 'obrigado', 'como', 'por que', 'quando', 'onde', 'qual']
-    portuguese_count = sum(1 for word in portuguese_keywords if re.search(r'\b' + word + r'\b', lower_text))
-    
-    # Find the language with the highest count
-    scores = {
-        'en': english_count,
-        'fr': french_count,
-        'es': spanish_count,
-        'de': german_count,
-        'it': italian_count,
-        'pt': portuguese_count
-    }
-    
-    detected_lang = max(scores, key=scores.get)
-    
-    # If English has the highest score (or tied), return it
-    # Otherwise return the language with the highest count
-    if detected_lang and scores[detected_lang] > 0:
-        return detected_lang
-    
-    # Final fallback: default to English
+    # 5. Fallback : anglais (plus universel que français)
     return "en"
 
 
@@ -314,24 +277,37 @@ def detect_tunisian_dialect(text):
             return "fr"
 
     return None
-
-
 def get_language_instruction(lang_code, prompt_text=None):
-    """Get the appropriate language instruction for the detected language"""
-    # For Arabic, only use Tunisian dialect if there are specific Tunisian terms
+    """Instructions système fermes pour forcer la langue de réponse"""
+    
+    # Gestion du dialecte tunisien (gardez votre logique existante)
     if lang_code == "ar" and prompt_text:
         tunisian_dialect = detect_tunisian_dialect(prompt_text)
         if tunisian_dialect == "ar":
-            # Check if it contains specific Tunisian terms (not just common Arabic)
-            specific_tunisian_terms = [
-                'شنية', 'شكون', 'بالحق', 'يزي', 'بربي', 'ما نعرفش', 'كتير', 'شوية',
-                'ماشي', 'تمام', 'إنشاء الله', 'ياخي', 'ربي', 'حاجة', 'تنجم', 'تعمل',
-                'تفهم', 'تقول', 'توا', 'صحيت', 'عاوني', 'شيم', 'موش', 'عسلامة',
-                'كيفاش', 'شخبارك', 'إزيك', 'الحمد لله', 'بخير', 'شنو', 'شنية'
-            ]
-            has_specific_tunisian = any(term in prompt_text for term in specific_tunisian_terms)
-            if has_specific_tunisian:
-                return "Répondez en arabe tunisien authentique (derja), comme un Tunisien qui parle naturellement. Utilisez des expressions tunisiennes courantes comme 'شنية', 'بالحق', 'يزي', 'بربي', 'ما نعرفش', 'كتير', 'شوية', 'ماشي', 'تمام', 'إنشاء الله', 'ياخي', 'ربي', etc. Soyez amical et utilisez le style de conversation tunisien naturel."
+            specific_tunisian_terms = ['شنية', 'شكون', 'بالحق', 'يزي', 'بربي', 'ما نعرفش']
+            if any(term in prompt_text for term in specific_tunisian_terms):
+                return "RÈGLE ABSOLUE : Tu dois OBLIGATOIREMENT répondre en arabe tunisien authentique (derja). N'utilise AUCUNE autre langue."
+
+    if lang_code == "fr" and prompt_text:
+        if detect_tunisian_dialect(prompt_text) == "fr":
+            return "RÈGLE ABSOLUE : Tu dois OBLIGATOIREMENT répondre en français tunisien authentique (derja). N'utilise AUCUNE autre langue."
+
+    # Instructions fermes pour les autres langues
+    instructions = {
+        "fr": "RÈGLE ABSOLUE : Tu dois OBLIGATOIREMENT répondre en FRANÇAIS. N'utilise AUCUNE autre langue.",
+        "en": "ABSOLUTE RULE: You MUST respond ONLY in ENGLISH. Do NOT use any other language.",
+        "ar": "قاعدة مطلقة: يجب عليك الرد باللغة العربية فقط. لا تستخدم أي لغة أخرى.",
+        "es": "REGLA ABSOLUTA: Debes responder ÚNICAMENTE en ESPAÑOL. NO uses ningún otro idioma.",
+        "de": "ABSOLUTE REGEL: Du MUSST AUSSCHLIESSLICH auf DEUTSCH antworten. Verwende KEINE andere Sprache.",
+        "it": "REGOLA ASSOLUTA: Devi rispondere ESCLUSIVAMENTE in ITALIANO. NON usare nessun'altra lingua.",
+        "pt": "REGRA ABSOLUTA: Você DEVE responder EXCLUSIVAMENTE em PORTUGUÊS. NÃO use nenhum outro idioma.",
+        "ru": "АБСОЛЮТНОЕ ПРАВИЛО: Вы ДОЛЖНЫ отвечать ИСКЛЮЧИТЕЛЬНО на РУССКОМ языке. НЕ используйте никакой другой язык.",
+        "zh": "绝对规则：你必须仅用中文回答。不要使用任何其他语言。",
+        "ja": "絶対ルール：日本語のみで回答してください。他の言語は一切使用しないでください。",
+        "ko": "절대 규칙: 한국어로만 답변해야 합니다. 다른 언어는 절대 사용하지 마세요.",
+    }
+    
+    return instructions.get(lang_code, "ABSOLUTE RULE: You MUST respond ONLY in ENGLISH. Do NOT use any other language.")
 
     # For French, check for Tunisian dialect
     if lang_code == "fr" and prompt_text:
@@ -905,19 +881,13 @@ def proxy_ai():
                         break
             break
     
-    # Add language instruction to system message or create one
+    # Construire le message système avec instruction de langue ferme
     lang_instruction = get_language_instruction(detected_lang, prompt_text)
+    system_content = f"Tu es Nafti AI, un assistant intelligent et bienveillant. {lang_instruction} Utilise le format Markdown pour structurer tes réponses quand c'est approprié. Sois concis, précis et utile."
     
-    # Check if there's already a system message
-    has_system = any(msg.get('role') == 'system' for msg in api_messages)
-    if not has_system:
-        api_messages.insert(0, {"role": "system", "content": lang_instruction})
-    else:
-        # Update existing system message
-        for msg in api_messages:
-            if msg.get('role') == 'system':
-                msg['content'] = f"{msg['content']} {lang_instruction}"
-                break
+    # Remplacer ou ajouter le message système
+    api_messages = [msg for msg in api_messages if msg.get('role') != 'system']
+    api_messages.insert(0, {"role": "system", "content": system_content})
     
     if images_data:
         use_model = GROQ_VISION_MODEL

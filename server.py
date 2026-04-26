@@ -147,15 +147,15 @@ def detect_language(text):
     except LangDetectException:
         pass
 
-    # 4. Mots-clés pour les textes courts (amélioré)
+    # 4. Mots-clés pour les textes courts (amélioré avec greetings et mots courants)
     lower_text = stripped_text.lower()
     
-    # Mots exclusivement français
-    fr_words = ['je', 'tu', 'nous', 'vous', 'ils', 'elles', 'une', 'des', 'est', 'sont', 'être', 'cette', 'celui', 'celle', 'mais', 'donc', 'aussi', 'très', 'bien', 'merci', 'bonjour', 'oui', 'comment', 'pourquoi', 'quand', 'où']
+    # Mots français (greetings + mots courants)
+    fr_words = ['salut', 'bonjour', 'coucou', 'au revoir', 'merci', 'oui', 'non', 'je', 'tu', 'nous', 'vous', 'ils', 'elles', 'une', 'des', 'est', 'sont', 'être', 'cette', 'celui', 'celle', 'mais', 'donc', 'aussi', 'très', 'bien', 'comment', 'pourquoi', 'quand', 'où', 'faire', 'pouvoir', 'devoir', 'vouloir', 'aller', 'venir', 'donner', 'prendre', 'mettre', 'sans', 'avec']
     fr_count = sum(1 for word in fr_words if re.search(r'\b' + re.escape(word) + r'\b', lower_text))
     
-    # Mots exclusivement anglais
-    en_words = ['the', 'is', 'are', 'am', 'be', 'to', 'of', 'and', 'in', 'that', 'have', 'has', 'for', 'not', 'on', 'with', 'you', 'do', 'does', 'this', 'but', 'hello', 'yes', 'no', 'thanks', 'what', 'how', 'why']
+    # Mots anglais (greetings + common words)
+    en_words = ['hi', 'hello', 'hey', 'goodbye', 'bye', 'thanks', 'thank you', 'yes', 'no', 'please', 'sorry', 'sure', 'okay', 'ok', 'help', 'the', 'is', 'are', 'am', 'be', 'to', 'of', 'and', 'in', 'that', 'have', 'has', 'for', 'not', 'on', 'with', 'you', 'do', 'does', 'this', 'but', 'what', 'how', 'why', 'can', 'could', 'would', 'should', 'will']
     en_count = sum(1 for word in en_words if re.search(r'\b' + re.escape(word) + r'\b', lower_text))
     
     # Retourner la langue avec le plus de correspondances

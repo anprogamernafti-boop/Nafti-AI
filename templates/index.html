@@ -2893,20 +2893,28 @@ function detectLanguage(text) {
   if (/[ãõáéíóúç]/i.test(text)) return { lang: 'pt', langCode: 'pt-BR' };
   if (/[äöüß]/i.test(text)) return { lang: 'de', langCode: 'de-DE' };
   
-  // 3. Mots-clés pour textes courts (amélioré)
+  // 3. Mots-clés pour textes courts (amélioré avec greetings et mots courants)
   var lowerText = text.toLowerCase();
   
-  var frCount = (lowerText.match(/\b(je|tu|nous|vous|ils|elles|une|des|est|sont|être|cette|celui|celle|mais|donc|aussi|très|bien|merci|bonjour|oui|comment|pourquoi|quand|où)\b/g) || []).length;
-  var enCount = (lowerText.match(/\b(the|is|are|am|be|to|of|and|in|that|have|has|for|not|on|with|you|do|does|this|but|hello|yes|no|thanks|what|how|why)\b/g) || []).length;
-  var esCount = (lowerText.match(/\b(el|la|los|las|de|del|en|un|una|es|son|para|por|con|hola|gracias|sí|qué|cómo|por qué)\b/g) || []).length;
-  var deCount = (lowerText.match(/\b(der|die|das|den|dem|des|ein|eine|und|ist|sind|für|mit|ja|nein|danke|hallo|was|wie|warum)\b/g) || []).length;
+  // Français: greetings + mots courants
+  var frCount = (lowerText.match(/\b(salut|bonjour|coucou|au revoir|au-revoir|merci|oui|non|svp|s'il|vous|tu|je|nous|ils|elles|une|des|est|sont|être|cette|celui|celle|mais|donc|aussi|très|bien|comment|pourquoi|quand|où|faire|pouvoir|devoir|vouloir|aller|venir|donner|prendre|mettre|aller|sans|avec)\b/g) || []).length;
+  
+  // English: greetings + common words
+  var enCount = (lowerText.match(/\b(hi|hello|hey|goodbye|bye|thanks|thank you|yes|no|please|sorry|sure|okay|ok|help|the|is|are|am|be|to|of|and|in|that|have|has|for|not|on|with|you|do|does|this|but|what|how|why|can|could|would|should|will|do|does|did|have|has|had)\b/g) || []).length;
+  
+  // Spanish: greetings + common words
+  var esCount = (lowerText.match(/\b(hola|adiós|adios|gracias|grazie|sí|si|no|por favor|disculpe|un momento|el|la|los|las|de|del|en|un|una|es|son|para|por|con|qué|cómo|por qué|puede|puedo|hay|haber|hacer|ir|venir|dar|tomar|poner|decir)\b/g) || []).length;
+  
+  // German: greetings + common words
+  var deCount = (lowerText.match(/\b(hallo|hi|guten tag|guten morgen|auf wiedersehen|danke|ja|nein|bitte|entschuldigung|der|die|das|den|dem|des|ein|eine|und|ist|sind|für|mit|kann|könnte|würde|soll|möchte|machen|gehen|kommen|geben|nehmen|sagen)\b/g) || []).length;
   
   // Retourner la langue avec le plus de correspondances
   var scores = { fr: frCount, en: enCount, es: esCount, de: deCount };
   var maxLang = Object.keys(scores).reduce((a, b) => scores[a] >= scores[b] ? a : b);
   
+  // Si aucune correspondance trouvée, retourner null (pas de fallback)
   if (scores[maxLang] === 0) {
-    return { lang: 'en', langCode: 'en-US' }; // Fallback anglais
+    return { lang: 'en', langCode: 'en-US' }; // Fallback à anglais
   }
   
   var langCodeMap = {

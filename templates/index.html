@@ -793,6 +793,33 @@ background: var(--accent-glow);
 }
 .attach-btn:active { transform: scale(.92); }
 
+/* Voice language selector */
+.voice-lang-select {
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--bg-chat);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  margin-right: 4px;
+}
+
+.voice-lang-select:hover {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.voice-lang-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 /* Voice recognition button */
 .voice-btn {
 width: 38px; height: 38px;
@@ -817,9 +844,9 @@ background: var(--accent-glow);
 }
 .voice-btn:active { transform: scale(.92); }
 .voice-btn.listening {
-border-color: #ef4444;
-color: #ef4444;
-background: rgba(239, 68, 68, 0.1);
+border-color: #0A8F94;
+color: #0A8F94;
+background: rgba(10,143,148,0.1);
 animation: pulse 1.5s infinite;
 }
 @keyframes pulse {
@@ -2098,6 +2125,13 @@ transform: translateY(-1px);
 <button class="attach-btn" id="attachBtn" title="Ajouter une pi&egrave;ce jointe" aria-label="Ajouter une pièce jointe">
 <i class="fa-solid fa-plus"></i>
 </button>
+<select id="voiceLangSelect" class="voice-lang-select" title="Langue vocale">
+  <option value="fr-FR">🇫🇷 FR</option>
+  <option value="ar-SA">🇸🇦 AR</option>
+  <option value="ar-MA">🇲🇦 AR-MA</option>
+  <option value="ar-EG">🇪🇬 AR-EG</option>
+  <option value="en-US">🇺🇸 EN</option>
+</select>
 <button class="voice-btn" id="voiceBtn" title="Reconnaissance vocale" aria-label="Reconnaissance vocale">
 <i class="fa-solid fa-microphone"></i>
 </button>
@@ -3669,49 +3703,43 @@ window.shareConversation = function() {
 </html>
 
 <script>
-// === Reconnaissance vocale — auto-détection de langue ===
+// === Reconnaissance vocale — Langue verrouillée (sans auto-détection) ===
 (function() {
 document.addEventListener('DOMContentLoaded', function() {
   var voiceBtn      = document.getElementById('voiceBtn');
   var messageInput  = document.getElementById('messageInput');
-  var langBadge     = document.getElementById('voiceLangBadge');
+  var voiceLangSelect = document.getElementById('voiceLangSelect');
+  var STORAGE_KEY   = 'nafti_voice_lang';
 
   if (!voiceBtn) return;
 
   // ── Support check ─────────────────────────────────────
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     voiceBtn.style.display = 'none';
+    if (voiceLangSelect) voiceLangSelect.style.display = 'none';
     return;
   }
 
-  // ── Langue par défaut : celle du navigateur, sinon fr-FR ─
-  var navLang = (navigator.language || 'fr-FR').toLowerCase();
-  var DEFAULT_LANG = navLang.startsWith('ar') ? 'ar-SA'
-                   : navLang.startsWith('de') ? 'de-DE'
-                   : navLang.startsWith('en') ? 'en-US'
-                   : navLang.startsWith('es') ? 'es-ES'
-                   : navLang.startsWith('pt') ? 'pt-BR'
-                   : navLang.startsWith('zh') ? 'zh-CN'
-                   : navLang.startsWith('ru') ? 'ru-RU'
-                   : navLang.startsWith('ja') ? 'ja-JP'
-                   : navLang.startsWith('ko') ? 'ko-KR'
-                   : navLang.startsWith('el') ? 'el-GR'
-                   : navLang.startsWith('he') ? 'he-IL'
-                   : navLang.startsWith('tr') ? 'tr-TR'
-                   : navLang.startsWith('it') ? 'it-IT'
-                   : navLang.startsWith('pl') ? 'pl-PL'
-                   : navLang.startsWith('nl') ? 'nl-NL'
-                   : navLang.startsWith('sv') ? 'sv-SE'
-                   : navLang.startsWith('da') ? 'da-DK'
-                   : navLang.startsWith('no') ? 'nb-NO'
-                   : navLang.startsWith('fi') ? 'fi-FI'
-                   : navLang.startsWith('cs') ? 'cs-CZ'
-                   : navLang.startsWith('hu') ? 'hu-HU'
-                   : navLang.startsWith('ro') ? 'ro-RO'
-                   : navLang.startsWith('th') ? 'th-TH'
-                   : navLang.startsWith('vi') ? 'vi-VN'
-                   : navLang.startsWith('hi') ? 'hi-IN'
-                   : 'fr-FR';
+  // ── Fonctions utilitaires pour validation d'arabe ─────
+  function normalizeArabic(text) {
+    return text
+      .replace(/[\u0625\u0623\u0622]/g, '\u0627')
+      .replace(/\u0649/g, '\u064a')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function isArabicText(text) {
+    return /[\u0600-\u06FF]/.test(text || '');
+  }
+
+  function getVoiceLang() {
+    return localStorage.getItem(STORAGE_KEY) || 'fr-FR';
+  }
+
+  function setVoiceLang(lang) {
+    localStorage.setItem(STORAGE_KEY, lang);
+  }
 
   // ── Détection rapide de langue depuis texte partiel ───
   var LANG_MAP = {
@@ -3863,128 +3891,91 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // ── État ──────────────────────────────────────────────
-  var isListening     = false;
-  var detectedLang    = DEFAULT_LANG;  // langue confirmée par interim
-  var pendingTranscript = '';          // texte accumulé (finals)
-  var restartPending  = false;         // redémarrage en cours
-  var lastDetectedLang = DEFAULT_LANG; // Dernière langue détectée (pour éviter les redémarrages répétés)
-  var recognition     = null;
+  var isListening = false;
+  var recognition = null;
 
   function buildRecognition(lang) {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    var r  = new SR();
-    r.continuous      = true;
-    r.interimResults  = true;
+    var r = new SR();
+    r.continuous = true;
+    r.interimResults = true;
     r.maxAlternatives = 1;
-    r.lang            = lang;
+    r.lang = lang;
     return r;
   }
 
-  function updateBadge(langCode) {
-    if (langBadge) langBadge.textContent = LANG_LABELS[langCode] || langCode.split('-')[0].toUpperCase();
-  }
-
-  function attachHandlers(r) {
-    r.onstart = function() {
-      isListening = true;
-      restartPending = false;
-      voiceBtn.classList.add('listening');
-      voiceBtn.innerHTML = '<i class="fa-solid fa-stop"></i><span class="voice-lang-badge" id="voiceLangBadge">' + (LANG_LABELS[detectedLang] || 'AUTO') + '</span>';
-      voiceBtn.title = 'Arrêter';
-      langBadge = document.getElementById('voiceLangBadge');
-    };
-
-    r.onresult = function(event) {
-      var interimText = '';
-      var newFinalText = '';
-      
-      for (var i = event.resultIndex; i < event.results.length; i++) {
-        var result = event.results[i];
-        if (result.isFinal) {
-          newFinalText += result[0].transcript + ' ';
-        } else {
-          interimText += result[0].transcript;
-        }
-      }
-
-      // Ajouter UNIQUEMENT le texte final nouveau (pas de duplication)
-      if (newFinalText) {
-        pendingTranscript += newFinalText;
-        messageInput.value = pendingTranscript.trim();
-        messageInput.dispatchEvent(new Event('input'));
-      }
-
-      // ✅ IMPORTANT: Détecter SEULEMENT après avoir du texte FINALISÉ
-      // Cela évite les redémarrages constants et les pertes de texte
-      if (newFinalText) {
-        // Analyser le texte finalisé pour détecter la langue
-        detectLangCode(newFinalText).then(function(detected) {
-          if (detected && detected !== lastDetectedLang) {
-            lastDetectedLang = detected;  // Mémoriser la dernière détection
-            
-            // Changer la langue SEULEMENT si vraiment différente
-            if (detected !== detectedLang) {
-              detectedLang = detected;
-              updateBadge(detectedLang);
-              // Redémarrer avec la bonne langue
-              if (!restartPending) {
-                restartPending = true;
-                try { r.stop(); } catch(e) {}
-              }
-            }
-          }
-        }).catch(function(err) {
-          console.warn('Language detection error:', err);
-        });
-      }
-    };
-
-    r.onerror = function(e) {
-      if (e.error === 'no-speech' || e.error === 'aborted') return;
-      stopListening(true);
-    };
-
-    r.onend = function() {
-      if (restartPending && isListening) {
-        // Redémarrer avec la langue détectée - NE PAS RÉINITIALISER pendingTranscript
-        // pour conserver le texte déjà accumulé
-        recognition = buildRecognition(detectedLang);
-        attachHandlers(recognition);
-        try { recognition.start(); } catch(e) { stopListening(true); }
-      } else {
-        stopListening(false);
-      }
-    };
+  if (voiceLangSelect) {
+    voiceLangSelect.value = getVoiceLang();
+    voiceLangSelect.addEventListener('change', function() {
+      setVoiceLang(this.value);
+    });
   }
 
   function startListening() {
     if (isListening) return;
-    pendingTranscript = '';
-    lastDetectedLang = DEFAULT_LANG;  // Réinitialiser la détection précédente
-    detectedLang = DEFAULT_LANG;
-    recognition = buildRecognition(detectedLang);
-    attachHandlers(recognition);
+    
+    var lockedLang = getVoiceLang();
+    recognition = buildRecognition(lockedLang);
+
+    recognition.onstart = function() {
+      isListening = true;
+      voiceBtn.classList.add('listening');
+      voiceBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+    };
+
+    recognition.onresult = function(event) {
+      for (var i = event.resultIndex; i < event.results.length; i++) {
+        var result = event.results[i];
+        if (!result.isFinal) continue;
+
+        var transcript = (result[0].transcript || '').trim();
+        if (!transcript) continue;
+
+        // 🔒 ARABE: validation supplémentaire - rejeter si texte non-arabe
+        if (lockedLang.startsWith('ar')) {
+          transcript = normalizeArabic(transcript);
+          if (!isArabicText(transcript)) {
+            console.warn('[Voice] Transcript rejeté: langue attendue arabe, texte non arabe détecté');
+            continue;
+          }
+        }
+
+        var current = messageInput.value;
+        messageInput.value = current + (current && !current.endsWith(' ') ? ' ' : '') + transcript;
+        messageInput.dispatchEvent(new Event('input'));
+      }
+    };
+
+    recognition.onerror = function(e) {
+      if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        stopListening(true);
+      }
+    };
+
+    recognition.onend = function() {
+      stopListening(false);
+    };
+
     try {
       recognition.start();
     } catch(e) {
       console.warn('[Voice] start error:', e);
+      stopListening(true);
     }
   }
 
   function stopListening(force) {
     if (!isListening && !force) return;
-    isListening     = false;
-    restartPending  = false;
+    isListening = false;
     voiceBtn.classList.remove('listening');
     voiceBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-    voiceBtn.title = 'Reconnaissance vocale (auto-détection)';
     try { if (recognition) recognition.stop(); } catch(e) {}
     messageInput.focus();
   }
 
   voiceBtn.addEventListener('click', function() {
-    if (isListening) { restartPending = false; stopListening(true); }
-    else { startListening(); }
+    if (isListening) stopListening(true);
+    else startListening();
   });
 });
 })();

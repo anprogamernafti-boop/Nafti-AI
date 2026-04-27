@@ -2128,8 +2128,6 @@ transform: translateY(-1px);
 <select id="voiceLangSelect" class="voice-lang-select" title="Langue vocale">
   <option value="fr-FR">🇫🇷 FR</option>
   <option value="ar-SA">🇸🇦 AR</option>
-  <option value="ar-MA">🇲🇦 AR-MA</option>
-  <option value="ar-EG">🇪🇬 AR-EG</option>
   <option value="en-US">🇺🇸 EN</option>
 </select>
 <button class="voice-btn" id="voiceBtn" title="Reconnaissance vocale" aria-label="Reconnaissance vocale">
@@ -3807,6 +3805,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // On traite finaux ET intérims, mais on s'engage seulement sur les finaux
         if (!result.isFinal) {
           // Les intérims, on les affiche mais on garde pas
+          lastProcessedIndex = i;  // 🔥 IMPORTANT: marquer même les intérims!
           continue;
         }
 

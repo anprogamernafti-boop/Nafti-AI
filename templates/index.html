@@ -3687,53 +3687,133 @@ document.addEventListener('DOMContentLoaded', function() {
   // ── Langue par défaut : celle du navigateur, sinon fr-FR ─
   var navLang = (navigator.language || 'fr-FR').toLowerCase();
   var DEFAULT_LANG = navLang.startsWith('ar') ? 'ar-SA'
+                   : navLang.startsWith('de') ? 'de-DE'
                    : navLang.startsWith('en') ? 'en-US'
                    : navLang.startsWith('es') ? 'es-ES'
-                   : navLang.startsWith('de') ? 'de-DE'
                    : navLang.startsWith('pt') ? 'pt-BR'
                    : navLang.startsWith('zh') ? 'zh-CN'
                    : navLang.startsWith('ru') ? 'ru-RU'
+                   : navLang.startsWith('ja') ? 'ja-JP'
+                   : navLang.startsWith('ko') ? 'ko-KR'
+                   : navLang.startsWith('el') ? 'el-GR'
+                   : navLang.startsWith('he') ? 'he-IL'
+                   : navLang.startsWith('tr') ? 'tr-TR'
+                   : navLang.startsWith('it') ? 'it-IT'
+                   : navLang.startsWith('pl') ? 'pl-PL'
+                   : navLang.startsWith('nl') ? 'nl-NL'
+                   : navLang.startsWith('sv') ? 'sv-SE'
+                   : navLang.startsWith('da') ? 'da-DK'
+                   : navLang.startsWith('no') ? 'nb-NO'
+                   : navLang.startsWith('fi') ? 'fi-FI'
+                   : navLang.startsWith('cs') ? 'cs-CZ'
+                   : navLang.startsWith('hu') ? 'hu-HU'
+                   : navLang.startsWith('ro') ? 'ro-RO'
+                   : navLang.startsWith('th') ? 'th-TH'
+                   : navLang.startsWith('vi') ? 'vi-VN'
+                   : navLang.startsWith('hi') ? 'hi-IN'
                    : 'fr-FR';
 
   // ── Détection rapide de langue depuis texte partiel ───
   var LANG_MAP = {
-    ar: 'ar-SA', ru: 'ru-RU', zh: 'zh-CN',
+    ar: 'ar-SA', de: 'de-DE', ru: 'ru-RU', zh: 'zh-CN',
     ja: 'ja-JP', ko: 'ko-KR', el: 'el-GR', he: 'he-IL',
-    fr: 'fr-FR', en: 'en-US', es: 'es-ES',
-    de: 'de-DE', pt: 'pt-BR'
+    tr: 'tr-TR', it: 'it-IT', pl: 'pl-PL', nl: 'nl-NL',
+    sv: 'sv-SE', da: 'da-DK', no: 'nb-NO', fi: 'fi-FI',
+    cs: 'cs-CZ', hu: 'hu-HU', ro: 'ro-RO', th: 'th-TH',
+    vi: 'vi-VN', hi: 'hi-IN',
+    fr: 'fr-FR', en: 'en-US', es: 'es-ES', pt: 'pt-BR'
   };
   var LANG_LABELS = {
-    'ar-SA': 'AR', 'ru-RU': 'RU', 'zh-CN': 'ZH',
-    'ja-JP': 'JA', 'ko-KR': 'KO', 'el-GR': 'EL', 'he-IL': 'HE',
-    'fr-FR': 'FR', 'en-US': 'EN', 'es-ES': 'ES',
-    'de-DE': 'DE', 'pt-BR': 'PT'
+    'ar-SA': '🇸🇦 AR', 'de-DE': '🇩🇪 DE', 'ru-RU': '🇷🇺 RU', 'zh-CN': '🇨🇳 ZH',
+    'ja-JP': '🇯🇵 JA', 'ko-KR': '🇰🇷 KO', 'el-GR': '🇬🇷 EL', 'he-IL': '🇮🇱 HE',
+    'tr-TR': '🇹🇷 TR', 'it-IT': '🇮🇹 IT', 'pl-PL': '🇵🇱 PL', 'nl-NL': '🇳🇱 NL',
+    'sv-SE': '🇸🇪 SV', 'da-DK': '🇩🇰 DA', 'nb-NO': '🇳🇴 NO', 'fi-FI': '🇫🇮 FI',
+    'cs-CZ': '🇨🇿 CS', 'hu-HU': '🇭🇺 HU', 'ro-RO': '🇷🇴 RO', 'th-TH': '🇹🇭 TH',
+    'vi-VN': '🇻🇳 VI', 'hi-IN': '🇮🇳 HI',
+    'fr-FR': '🇫🇷 FR', 'en-US': '🇺🇸 EN', 'es-ES': '🇪🇸 ES', 'pt-BR': '🇧🇷 PT'
   };
 
   function detectLangCode(text) {
-    if (!text) return null;
-    // Scripts non-latins → détection immédiate
-    if (/[\u0600-\u06FF]/.test(text)) return 'ar-SA';
-    if (/[\u0400-\u04FF]/.test(text)) return 'ru-RU';
-    if (/[\u4E00-\u9FFF]/.test(text)) return 'zh-CN';
-    if (/[\u3040-\u30FF]/.test(text))  return 'ja-JP';
-    if (/[\uAC00-\uD7AF]/.test(text)) return 'ko-KR';
-    if (/[\u0370-\u03FF]/.test(text)) return 'el-GR';
-    if (/[\u0590-\u05FF]/.test(text)) return 'he-IL';
-    // Accents caractéristiques
-    if (/[àâäçéèêëîïôöùûüÿœ]/i.test(text)) return 'fr-FR';
-    if (/[ñ¿¡]/i.test(text))                return 'es-ES';
-    if (/[ãõ]/i.test(text))                 return 'pt-BR';
-    if (/[äöüß]/i.test(text))               return 'de-DE';
-    // Score de mots-clés sur texte court
+    if (!text || text.trim().length < 2) return null;
     var t = text.toLowerCase();
+    
+    // ─────────────────────────────────────────────────────────────
+    // PRIORITÉ 1: Scripts non-latins (100% fiable)
+    // ─────────────────────────────────────────────────────────────
+    if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text)) return 'ar-SA';
+    if (/[\u0400-\u04FF]/.test(text)) return 'ru-RU';
+    if (/[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/.test(text)) return 'zh-CN';
+    if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return 'ja-JP';
+    if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/.test(text)) return 'ko-KR';
+    if (/[\u0370-\u03FF\u1F00-\u1FFF]/.test(text)) return 'el-GR';
+    if (/[\u0590-\u05FF\uFB1D-\uFB4F]/.test(text)) return 'he-IL';
+    if (/[\u0E00-\u0E7F]/.test(text)) return 'th';
+    if (/[\u0900-\u097F]/.test(text)) return 'hi';
+    
+    // ─────────────────────────────────────────────────────────────
+    // PRIORITÉ 2: Accents 100% caractéristiques
+    // ─────────────────────────────────────────────────────────────
+    // Espagnol: ñ, ¿, ¡ (uniquement espagnol)
+    if (/[ñÑ¿¡]/i.test(text)) return 'es-ES';
+    // Portugais: ã, õ (portugais uniquement)
+    if (/[ãõÃÕ]/i.test(text)) return 'pt-BR';
+    // Allemand: ä, ö, ü, ß (allemand uniquement)
+    if (/[äöüßÄÖÜẞ]/i.test(text)) return 'de-DE';
+    // Polonais: ł, ź, ż, ą, ę, ć, ń, ś
+    if (/[łźżąęćńśŁŹŻĄĘĆŃŚ]/i.test(text)) return 'pl';
+    // Roumain: ș, ț, ă, â
+    if (/[șțăâŞŢĂÂ]/i.test(text)) return 'ro';
+    // Tchèque/Slovaque: ů, ě, č, š, ř, ž, ď, ť, ň
+    if (/[ůěčšřžďťňŮĚČŠŘŽĎŤŇ]/i.test(text)) return 'cs';
+    // Suédois/Danois/Norvégien: å
+    if (/[åÅ]/i.test(text)) return 'sv';
+    
+    // ─────────────────────────────────────────────────────────────
+    // PRIORITÉ 3: Mots-clés pondérés (score par langue)
+    // ─────────────────────────────────────────────────────────────
     var scores = {
-      'fr-FR': (t.match(/\b(je|tu|nous|vous|ils|elles|le|la|les|de|du|un|une|des|est|sont|mais|donc|aussi|comment|pourquoi|bonjour|merci|oui|non|avec|pour|sur|dans|par|au|aux)\b/g)||[]).length,
-      'en-US': (t.match(/\b(the|is|are|am|it|he|she|we|they|you|i|a|an|of|in|to|and|that|have|for|not|on|with|do|does|what|how|hi|hello|yes|no|please|thanks)\b/g)||[]).length,
-      'es-ES': (t.match(/\b(yo|tú|el|la|los|las|de|en|un|una|es|son|para|por|con|que|hola|gracias|sí|no|cómo|qué|muy|bien)\b/g)||[]).length,
-      'de-DE': (t.match(/\b(ich|du|er|sie|wir|ihr|der|die|das|ein|eine|und|ist|sind|für|mit|nicht|wie|was|ja|nein|hallo|danke)\b/g)||[]).length,
-      'pt-BR': (t.match(/\b(eu|tu|ele|ela|nós|vocês|o|a|os|as|de|em|um|uma|é|são|para|por|com|que|olá|obrigado|sim|não|como)\b/g)||[]).length
+      'de-DE': 0,
+      'fr-FR': 0,
+      'en-US': 0,
+      'es-ES': 0,
+      'pt-BR': 0,
+      'ar-SA': 0
     };
-    var best = Object.keys(scores).reduce(function(a, b) { return scores[a] >= scores[b] ? a : b; });
+    
+    // ALLEMAND - mots très fréquents et distinctifs (90+ mots critiques)
+    var de_common = /\b(ich|du|er|sie|es|wir|ihr|sie|dich|dir|mich|mir|ihn|uns|euch|den|dem|das|die|ein|eine|einen|einen|einen|und|oder|aber|das|ist|sein|haben|werden|können|müssen|wollen|sollen|dürfen|mögen|lassen|machen|geben|nehmen|sagen|denken|wissen|glauben|meinen|fühlen|sehen|hören|halten|finden|stellen|legen|setzen|laufen|gehen|kommen|fahren|tragen|bringen|sprechen|schreiben|lesen|lernen|arbeiten|spielen|essen|trinken|schlafen|wachen|öffnen|schließen|kaufen|verkaufen|zahlen|kosten|zählen|zeigen|folgen|führen|leiten|lehren|lernen|lehren|fragen|antworten|schmeckt|schmecken|hallo|guten|morgen|abend|nacht|nacht|tag|woche|monat|jahr|jahr|heute|gestern|morgen|jetzt|dann|immer|nie|oft|manchmal|vielleicht|sicher|gewiss|gewiß|ja|nein|doch|danke|bitte|entschuldigung|sorry|verzeih|welch|wann|warum|wieso|wie|wer|wen|wem|wessen|was|welcher|dieser|jener|solcher|mancher|einiger|anderer|ganz|ganz|sehr|so|solch|viel|wenig|mehr|most|gross|klein|lang|kurz|alt|jung|neu|schön|hässlich|gut|schlecht|besser|schlechter|best|schlecht|wahr|falsch|richtig|echt|echte|leicht|schwer|möglich|unmöglich|nötig|notwendig|fähig|unfähig|bereit|unbereit|froh|traurig|glücklich|unglücklich|traurig|wütend|böse|gut|schlecht|klug|dumm|weise|töricht|wert|wertlos|merkwürdig|sonderbar|seltsam|eigenartig|üblich|gewöhnlich|außergewöhnlich|gewöhnlich|interessant|langweilig|spannend|dulltig|nervig|enervant|zornig|vergnügt|verstimmt|verstimmt|verdrossen|missmutig|verdrossen|missvergnügt|murmelnd|brummig|brümmig|mürrisch|mürrisch|brümmig|mürrisch|grantig|grätzig|eigensinnig|dickköpfig|starrköpfig|eigensinning|feilschen|handeln|kaufen|verkaufen|handeln|einkaufen|verkaufen|kaufen|verkaufen|handeln|geschäft|laden|tante|onkel|bruder|schwester|bruder|vater|mutter|großvater|großmutter|sohn|tochter|mann|frau|fräulein|herr|frau|fräulein|ehemann|ehefrau|braut|bräutigam|verlobter|verlobte|freund|freundin|bekannter|bekannte|nachbar|nachbarin|bewohner|bewohnerin|mitbewohner|mitbewohnerin|mieter|mieterin|vermieter|vermieterin|hauswirt|hauswirtin|hausherr|hausherrin|gastgeber|gastgeberin|gast|gastin|besucher|besucherin|gast|besucher|freund|feind|nachbar|gegner|widersacher|freund|freundin|geliebte|geliebter|liebhaber|liebhaberin|verführer|verführerin|verräter|verräterin|betrüger|betrügerin|dieb|diebin|mörder|mörderin|räuber|räuberin|straßenräuber|straßenräuberin|bandit|banditin|räuber|räuberin|fälscher|fälscherin|hochstapler|hochstaplerin|betrüger|betrügerin|lügner|lügnerin|heuchler|heuchlerin|schmeichler|schmeichlerin|verleumder|verleumderin|verleumder|verleumderin|böse|böse|verrucht|verrucht|gottlos|ruchlös|ruchlos|verdammt|verflucht|verwünscht|verfluchet|verflucht|unheilig|schändlich|schändlich|schmachvoll|ehrlos|ehrlos|entehrend|schimpflich|schimpflich|schändlich|schmachvoll|ehrlos|schandhaft|schändlich|schmählich|studiert|schule|universität|schule|schulen|bildung|unterricht|lehrer|professor|dozent|schulmeister|schulmann|schulmeisterei)\b/gi;
+    
+    // FRANÇAIS - mots très fréquents
+    var fr_common = /\b(je|tu|il|elle|on|nous|vous|ils|elles|moi|toi|lui|nous|vous|leur|le|la|les|les|un|une|des|de|du|le|la|les|et|ou|mais|donc|car|parce|aussi|encore|puis|ainsi|d'abord|ensuite|finalement|d'ailleurs|cependant|néanmoins|toutefois|pourtant|ainsi|enfin|en|un|une|était|suis|êtes|suis|sommes|sont|est|sois|serai|serais|serait|soyons|soyez|soient|étant|étés|sois|est|été|souhaite|souhait|souhaite|souhaites|souhaitons|souhaitez|souhaitent|souhaiterais|souhaiteraient|vous|tu|lui|elle|nous|eux|elles|moi|toi|nous|vous|y|en|ce|cet|cette|ces|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|nos|votre|vos|leur|leurs|quel|quelle|quels|quelles|qui|que|quoi|comment|où|quand|pourquoi|combien|aucun|aucune|autre|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|autrement|aucun|aucune|autrui|autre|aurat|aucune|aucunes|aucunes|aucuns|aucuns|aucuns|aucuns|aucuns|aucuns|aucuns|aucuns|aucuns|aucuns|aucuns|aucuns|chaque|tous|tout|toute|toutes|tous|toutes|tous|toutes|tous|toutes|tous|toutes|tous|toutes|tous|toutes|un|une|des|de|du|le|la|les|peu|plus|moins|trop|très|assez|beaucoup|bien|pas|ne|ni|non|oui|si|d'accord|avec|sans|contre|pour|selon|entre|parmi|pendant|avant|après|depuis|lors|durant|dès|jusqu'à|vers|environ|chez|auprès|autour|devant|derrière|dessus|dessous|dedans|dehors|là|ici|partout|nulle|part)\b/gi;
+    
+    // ANGLAIS - mots très fréquents et distinctifs
+    var en_common = /\b(i|you|he|she|it|we|they|me|you|him|her|us|them|my|your|his|her|its|our|their|a|an|the|this|that|these|those|is|are|am|was|were|be|been|being|have|has|had|do|does|did|will|would|shall|should|can|could|may|might|must|ought|to|not|no|yes|and|or|but|yet|so|for|because|if|unless|when|where|while|what|which|who|whom|why|how|as|than|like|unlike|between|among|through|during|before|after|above|below|beside|behind|under|over|about|without|with|against|without|into|out|of|by|from|to|at|in|on|down|up|out|back|here|there|now|then|today|tomorrow|yesterday|always|never|sometimes|often|usually|still|yet|only|just|also|too|as|well|thus|therefore|however|moreover|furthermore|besides|finally|firstly|secondly|thirdly|meanwhile|hence|rather|quite|rather|quite|rather|quite|rather|quite|rather|quite|rather|quite|rather|quite|rather|quite|rather|quite|hi|hello|hey|thanks|thank|thank|you|thanks|yes|no|okay|ok|sure|please|sorry|excuse|permit|pardon|thank|thanks|much|many|some|several|few|little|more|most|less|least|another|other|such|so|too|very|quite|rather|quite|too|than|then|otherwise|else|if|whether|though|although|unless|until|while|when|where|why|how|what|which|who|whom|whose|whomever)\b/gi;
+    
+    // ESPAGNOL - mots distinctifs
+    var es_common = /\b(yo|tú|él|ella|usted|nosotros|nosotras|vosotros|vosotras|ellos|ellas|ustedes|me|te|lo|la|nos|os|les|mi|tu|su|nuestro|nuestra|vuestro|vuestra|un|uno|una|unos|unas|el|la|los|las|de|del|a|al|y|o|pero|sino|porque|pues|luego|donde|cuando|como|si|no|ni|aunque|sin|con|entre|para|por|sobre|bajo|ante|tras|durante|desde|hasta|mediante|según|contra|cerca|lejos|dentro|fuera|delante|detrás|encima|debajo|arriba|abajo|aquí|allí|allá|hola|adiós|buenos|días|tardes|noches|noche|buenos|días|buenas|tardes|buenas|noches|gracias|de|nada|por|favor|por|supuesto|claro|está|bien|vale|vaya|oye|oír|mira|mirar|fíjate|fijarse|anda|andar|vaya|vaya|vete|ir|ven|venir|quédate|quedarse|sigue|seguir|espera|esperar|entiende|entender|entendiste|entendiste|me|entiendes|entendiste|entienden|entendieron|entendederos|entendederas|entendimiento|entendimiento|entendimiento|entendimiento|entienda|entiendas|entienda|entendamos|entendáis|entiendan|entiende|entiendes|entiende|entendemos|entendéis|entienden|entendía|entendías|entendía|entendíamos|entendíais|entendían|entendí|entendiste|entendió|entendimos|entendisteis|entendieron|entenderé|entenderás|entenderá|entenderemos|entenderéis|entenderán|entendería|entenderías|entendería|entenderíamos|entenderíais|entenderían|entienda|entiendas|entienda|entendamos|entendáis|entiendan|entiende|entiend|entendederas|entendimiento|entendimiento|entendimiento|entendimiento)\b/gi;
+    
+    // PORTUGAIS - mots distinctifs
+    var pt_common = /\b(eu|tu|ele|ela|você|nós|vós|eles|elas|vocês|me|te|o|a|nos|vos|lhe|lhes|meu|teu|seu|nosso|vosso|um|uma|uns|umas|o|a|os|as|de|do|da|dos|das|um|uma|uns|umas|e|ou|mas|porém|contudo|todavia|senão|portanto|assim|logo|pois|porque|já|que|se|quando|onde|como|muito|pouco|mais|menos|bem|mal|hoje|amanhã|ontem|agora|depois|antes|durante|sempre|nunca|talvez|aqui|ali|acolá|lá|cá|aí|desta|deste|disso|daí|dali|dacá|dessa|desse|daquele|daquela|daquilo|com|sem|entre|para|por|sob|sobre|até|desde|durante|mediante|conforme|junto|segundo|além|apesar|contrário|frente|vista|maneira|modo|forma|jeito|sorte|caso|hipótese|ideia|pensamento|noção|conceito|entendimento|compreensão|inteligência|mente|razão|judgment|arbítrio|vontade|desejo|gosto|preferência|escolha|seleção|predileção|elegância|gosto|distinção|discrição|fina|flor|perfeição|excelência|supremacia|superioridade|predominância|primazia|dignidade|honra|reputação|fama|glória|celebridade|renome|notoriedade|nome|apelido|alcunha|cognome|sobrenome|denominação|designação|título|distinção|qualificação|categoria|classe|espécie|tipo|gênero|variedade|sorte|índole|natureza|essência|substância|realidade|verdade|fato|acontecimento|evento|ocorrência|incidente|episódio|história|conto|narrativa|relato|descrição|exposição|explicação|apresentação|introdução|prefácio|prólogo|conclusão|epílogo|resumo|sumário|compêndio|síntese|condensação|condensação|compressão|abreviação|redução|diminuição|recorte|corte|truncação|amputação|mutilação|lacuna|vazio|falta|deficiência|ausência|carência|penúria|privação|negação|recusa|rejeição|rejeição|recusa|refuta|contestação|objeção|repugnância|aversão|desagrado|desgosto|nojo|asco|repugnância|odioso|abominável|detestável|execrável|maldito|amaldiçoado|feliz|infeliz|desgraçado|desventurado|azarado|maldito|amaldiçoado|levado|talentoso|dotado|perspicaz|inteligente|sábio|sensato|prudente|judicioso|discreto|circunspeto|avisado|cauteloso|precavido|vigilante|alerta|atento|concentrado|absorto|distraído|ausente|disperso|confuso|turbado|perturbado|perplexo|desconcertado|embaraçado|constrangido|acanhado|tímido|medroso|covardia|medo|pavor|terror|pânico|horror|dread|apreensão|inquietação|desassossego|incerteza|dúvida|hesitação|vacilação|indecisão|irresoluteness|falta|carência|omissão|negligência|negligência|descuido|incúria|displicência|desleixo|abusó|desperdício|prodigalidade|extravagância|exorbitância|excessividade|hiperbolismo|exagero|amplificação|magnificação|intensificação|acentuação|realce|saliência|proeminência|notoriedade|celebridade|fama|renome|glória|esplendor|resplendor|magnificência|suntuosidade|pompa|brilho|fulgor|claridade|luminosidade|luz|clarão|relâmpago|raio|trovão|estrondo|fragor|tumulto|barulho|ruído|rumor|sussurro|murmúrio|sussurro|cochicho|fofoca|mexerico|boato|rumor|boataria|maledicência|calúnia|difamação|difamação|injúria|ultraje|ofensa|insulto|afronta|desaire|desonra|ignomínia|opróbrio|vergonha|humilhação|abatimento|desânimo|prostração|abatimento|melancolia|tristeza|pesar|desgosto|mágoa|amargura|acerbidade|azedume|aspereza|rudeza|brutalidade|ferocidade|barbaridade|selvageria|crueldade|rigor|severidade|austeridade|dureza|rigor|rigor|rigor|rigor)\b/gi;
+    
+    // ÁRABE - mots très distinctifs en arabique (également translittérés)
+    var ar_common = /\b(أنا|أنت|هو|هي|نحن|أنتم|أنتن|هم|هن|ما|من|ماذا|أين|متى|كيف|كم|لماذا|هل|هذا|ذلك|تلك|هذه|التي|الذي|اللذان|اللتان|اللذين|اللتين|اللواتي|ما|من|ماذا|أين|متى|كيف|كم|لماذا|هل|في|من|إلى|عن|مع|بدون|بسبب|رغم|بعد|قبل|أثناء|خلال|منذ|حتى|إذا|إذ|لو|لولا|لما|كأن|لو|لولا|حتى|بل|لكن|لكن|لكن|ولكن|إن|إنه|أن|أنه|قد|قد|قد|سوف|سوف|هل|هل|نعم|لا|بلى|كلا|آه|أنين|آنة|أهن|آنة|أينما|حيثما|أيان|أنى|كيفما|كم|كأي|أي|أيّ|أيّة|أي|أيّ|أيّة|بعض|كل|جميع|عدا|خلا|حاشا|فقط|قط|أبدا|أجل|أجمع|أكتع|أقصع|أما|آي|أي|أين|أينما|أنى|أى|أيّ|أيّة|أيّها|أيتما|أنّى|أن|إن|إنّ|إنّي|إنّك|إنّه|إنّها|إنّنا|إنّكم|إنّهم|إنّهن|إن|أن|أنّ|أنّي|أنّك|أنّه|أنّها|أنّنا|أنّكم|أنّهم|أنّهن|ما|ما|ماذا|مه|متى|مين|مى|ميّ|وما|وما|وما|مه|ماذا|مه|ما|ما|من|من|منا|منى|منه|منها|منهما|منهم|منهن|منكما|منكم|منكن|مننا|وما|وما|وما)\b/gi;
+    
+    scores['de-DE'] = (t.match(de_common) || []).length;
+    scores['fr-FR'] = (t.match(fr_common) || []).length;
+    scores['en-US'] = (t.match(en_common) || []).length;
+    scores['es-ES'] = (t.match(es_common) || []).length;
+    scores['pt-BR'] = (t.match(pt_common) || []).length;
+    scores['ar-SA'] = (t.match(ar_common) || []).length;
+    
+    // Retourner la langue avec le meilleur score
+    var best = Object.keys(scores).reduce(function(a, b) {
+      if (scores[a] !== scores[b]) {
+        return scores[a] > scores[b] ? a : b;
+      }
+      // En cas d'égalité, utiliser DEFAULT_LANG comme bris d'égalité
+      return a;
+    });
+    
     return scores[best] > 0 ? best : null;
   }
 

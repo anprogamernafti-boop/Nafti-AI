@@ -793,64 +793,13 @@ background: var(--accent-glow);
 }
 .attach-btn:active { transform: scale(.92); }
 
-/* Voice wrapper */
-.voice-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-/* Voice language popover */
-.voice-lang-popover {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%) scale(0.9);
-  opacity: 0;
-  pointer-events: none;
-  background: var(--bg-chat);
-  border: 1.5px solid var(--border);
-  border-radius: 12px;
-  margin-bottom: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-  padding: 8px 0;
-  min-width: 140px;
-  z-index: 1000;
-  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.voice-lang-popover.show {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(-50%) scale(1);
-}
-
-.voice-lang-option {
-  padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.voice-lang-option:hover {
-  background: var(--accent-glow);
-  color: var(--accent);
-}
-
-.voice-lang-option.active {
-  background: var(--accent-glow);
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.voice-lang-option.active::before {
-  content: '✓';
-  font-weight: 700;
+/* Voice control + language dropdown */
+.voice-control {
+display: flex;
+align-items: center;
+position: relative;
+flex-shrink: 0;
+margin-left: 8px;
 }
 
 /* Voice recognition button */
@@ -868,7 +817,6 @@ flex-shrink: 0;
 font-size: 18px;
 transition: all .2s ease;
 position: relative;
-margin-left: 8px;
 }
 .voice-btn:hover {
 border-color: var(--accent);
@@ -887,28 +835,82 @@ animation: pulse 1.5s infinite;
 50% { opacity: 0.7; }
 }
 
-/* Voice lang indicator (language badge) */
+/* Voice language badge */
 .voice-lang-badge {
 position: absolute;
-top: -8px;
-right: -8px;
+top: -6px;
+right: -6px;
 font-size: 10px;
-font-weight: 700;
+font-weight: 800;
 background: var(--accent);
 color: #fff;
 border-radius: 6px;
 padding: 2px 5px;
-line-height: 1.2;
+line-height: 1.4;
 pointer-events: none;
 opacity: 0;
-transition: opacity .2s ease;
-box-shadow: 0 2px 8px rgba(10,143,148,0.2);
+transform: translateY(4px) scale(0.9);
+transition: opacity .2s ease, transform .2s ease;
+box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
-.voice-btn:hover .voice-lang-badge { 
-  opacity: 1; 
+
+.voice-control:hover .voice-lang-badge,
+.voice-control.lang-open .voice-lang-badge,
+.voice-control.listening .voice-lang-badge {
+opacity: 1;
+transform: translateY(0) scale(1);
 }
-.voice-btn.listening .voice-lang-badge { 
-  opacity: 1; 
+
+.voice-lang-menu {
+position: absolute;
+right: 0;
+bottom: calc(100% + 10px);
+min-width: 116px;
+padding: 6px;
+border-radius: 12px;
+border: 1.5px solid var(--border);
+background: var(--bg-chat);
+box-shadow: var(--shadow);
+display: grid;
+gap: 4px;
+opacity: 0;
+transform: translateY(8px) scale(0.96);
+transform-origin: bottom right;
+pointer-events: none;
+transition: opacity .22s ease, transform .22s cubic-bezier(.22,1,.36,1);
+z-index: 100;
+}
+
+.voice-control.lang-open .voice-lang-menu {
+opacity: 1;
+transform: translateY(0) scale(1);
+pointer-events: auto;
+}
+
+.voice-lang-option {
+width: 100%;
+border: 1px solid transparent;
+background: transparent;
+color: var(--text-primary);
+font-size: 12px;
+font-weight: 700;
+border-radius: 8px;
+padding: 8px 10px;
+text-align: left;
+cursor: pointer;
+transition: background .2s ease, border-color .2s ease, color .2s ease;
+font-family: inherit;
+}
+
+.voice-lang-option:hover {
+border-color: var(--accent);
+background: var(--accent-glow);
+}
+
+.voice-lang-option.is-active {
+border-color: var(--accent);
+color: var(--accent);
+background: var(--accent-glow);
 }
 
 /* Toast notifications */
@@ -2163,15 +2165,15 @@ transform: translateY(-1px);
 <button class="attach-btn" id="attachBtn" title="Ajouter une pi&egrave;ce jointe" aria-label="Ajouter une pièce jointe">
 <i class="fa-solid fa-plus"></i>
 </button>
-<div class="voice-wrapper">
-  <button class="voice-btn" id="voiceBtn" title="Reconnaissance vocale" aria-label="Reconnaissance vocale">
-    <i class="fa-solid fa-microphone"></i>
-    <span class="voice-lang-badge" id="voiceLangBadge">FR</span>
+<div class="voice-control" id="voiceControl">
+  <button class="voice-btn" id="voiceBtn" title="Reconnaissance vocale" aria-label="Reconnaissance vocale" aria-haspopup="menu" aria-expanded="false">
+  <i class="fa-solid fa-microphone"></i>
   </button>
-  <div class="voice-lang-popover" id="voiceLangPopover">
-    <div class="voice-lang-option" data-lang="fr-FR">🇫🇷 Français</div>
-    <div class="voice-lang-option" data-lang="ar-SA">🇸🇦 العربية</div>
-    <div class="voice-lang-option" data-lang="en-US">🇺🇸 English</div>
+  <span class="voice-lang-badge" id="voiceLangBadge">FR</span>
+  <div class="voice-lang-menu" id="voiceLangMenu" role="menu" aria-label="Choisir la langue vocale">
+    <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="fr-FR">🇫🇷 FR</button>
+    <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="ar-SA">🇸🇦 AR</button>
+    <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="en-US">🇺🇸 EN</button>
   </div>
 </div>
 
@@ -3748,10 +3750,14 @@ var VoiceRecognitionController = (function() {
   var wantsListening = false;
   var recognition = null;
   var lockedLang = null;
+  var isLangMenuOpen = false;
   
+  var voiceControl = null;
   var voiceBtn = null;
   var messageInput = null;
-  var voiceLangSelect = null;
+  var voiceLangMenu = null;
+  var voiceLangBadge = null;
+  var voiceLangOptions = [];
 
   var baseTextAtStart = '';
   var lastSetValue = '';
@@ -3780,6 +3786,63 @@ var VoiceRecognitionController = (function() {
 
   function setVoiceLang(lang) {
     localStorage.setItem(STORAGE_KEY, lang);
+  }
+
+  function langShortCode(lang) {
+    if (lang === 'ar-SA') return 'AR';
+    if (lang === 'en-US') return 'EN';
+    return 'FR';
+  }
+
+  function updateLanguageUI(lang) {
+    var selectedLang = lang || getVoiceLang();
+
+    if (voiceLangBadge) {
+      voiceLangBadge.textContent = langShortCode(selectedLang);
+    }
+
+    for (var i = 0; i < voiceLangOptions.length; i++) {
+      var option = voiceLangOptions[i];
+      var isActive = option.getAttribute('data-lang') === selectedLang;
+      option.classList.toggle('is-active', isActive);
+      option.setAttribute('aria-checked', isActive ? 'true' : 'false');
+    }
+  }
+
+  function openLanguageMenu() {
+    if (!voiceControl || !voiceLangMenu || wantsListening) return;
+    isLangMenuOpen = true;
+    voiceControl.classList.add('lang-open');
+    if (voiceBtn) voiceBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeLanguageMenu() {
+    if (!voiceControl || !voiceLangMenu) return;
+    isLangMenuOpen = false;
+    voiceControl.classList.remove('lang-open');
+    if (voiceBtn) voiceBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleLanguageMenu() {
+    if (isLangMenuOpen) {
+      closeLanguageMenu();
+    } else {
+      openLanguageMenu();
+    }
+  }
+
+  function applyVoiceLanguage(lang, shouldStart) {
+    setVoiceLang(lang);
+    updateLanguageUI(lang);
+    closeLanguageMenu();
+
+    if (wantsListening) {
+      stopListening(true);
+      setTimeout(function() { startListening(); }, 200);
+      return;
+    }
+
+    if (shouldStart) startListening();
   }
 
   function tokensEqual(a, b) {
@@ -3876,11 +3939,14 @@ var VoiceRecognitionController = (function() {
   function updateUI(listening) {
     if (!voiceBtn) return;
     if (listening) {
+      closeLanguageMenu();
       voiceBtn.classList.add('listening');
       voiceBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+      if (voiceControl) voiceControl.classList.add('listening');
     } else {
       voiceBtn.classList.remove('listening');
       voiceBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+      if (voiceControl) voiceControl.classList.remove('listening');
     }
   }
 
@@ -4022,51 +4088,15 @@ var VoiceRecognitionController = (function() {
     if (messageInput) messageInput.focus();
   }
 
-  function updateLangBadge() {
-    var langBadge = document.getElementById('voiceLangBadge');
-    if (langBadge) {
-      var lang = getVoiceLang();
-      var langCode = lang.split('-')[0].toUpperCase();
-      langBadge.textContent = langCode;
-    }
-  }
-
-  function updatePopoverState() {
-    var popover = document.getElementById('voiceLangPopover');
-    if (popover) {
-      var options = popover.querySelectorAll('.voice-lang-option');
-      var currentLang = getVoiceLang();
-      options.forEach(function(opt) {
-        if (opt.dataset.lang === currentLang) {
-          opt.classList.add('active');
-        } else {
-          opt.classList.remove('active');
-        }
-      });
-    }
-  }
-
-  function closePopover() {
-    var popover = document.getElementById('voiceLangPopover');
-    if (popover) {
-      popover.classList.remove('show');
-    }
-  }
-
-  function togglePopover(e) {
-    if (e) e.stopPropagation();
-    var popover = document.getElementById('voiceLangPopover');
-    if (popover) {
-      popover.classList.toggle('show');
-    }
-  }
-
   function init() {
+    voiceControl = document.getElementById('voiceControl');
     voiceBtn = document.getElementById('voiceBtn');
     messageInput = document.getElementById('messageInput');
-    voiceLangSelect = null; // Old select is removed
+    voiceLangMenu = document.getElementById('voiceLangMenu');
+    voiceLangBadge = document.getElementById('voiceLangBadge');
+    voiceLangOptions = Array.prototype.slice.call(document.querySelectorAll('.voice-lang-option'));
 
-    console.log('[Voice] Init - voiceBtn:', !!voiceBtn, 'messageInput:', !!messageInput);
+    console.log('[Voice] Init - voiceBtn:', !!voiceBtn, 'messageInput:', !!messageInput, 'voiceLangMenu:', !!voiceLangMenu);
 
     if (!voiceBtn) {
       console.warn('[Voice] voiceBtn not found');
@@ -4075,62 +4105,49 @@ var VoiceRecognitionController = (function() {
 
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       console.warn('[Voice] Speech Recognition API not supported');
-      voiceBtn.style.display = 'none';
+      if (voiceControl) {
+        voiceControl.style.display = 'none';
+      } else {
+        voiceBtn.style.display = 'none';
+      }
       return;
     }
 
-    // Initialize popover
-    var popover = document.getElementById('voiceLangPopover');
-    if (popover) {
-      var options = popover.querySelectorAll('.voice-lang-option');
-      options.forEach(function(opt) {
-        opt.addEventListener('click', function(e) {
-          e.stopPropagation();
-          var selectedLang = this.dataset.lang;
-          setVoiceLang(selectedLang);
-          console.log('[Voice] Language changed to:', selectedLang);
-          updateLangBadge();
-          updatePopoverState();
-          if (wantsListening) {
-            stopListening(true);
-            setTimeout(function() { startListening(); }, 200);
-          }
-          closePopover();
-        });
+    updateLanguageUI(getVoiceLang());
+
+    for (var i = 0; i < voiceLangOptions.length; i++) {
+      voiceLangOptions[i].addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var lang = this.getAttribute('data-lang');
+        if (!lang) return;
+        console.log('[Voice] Language changed to:', lang);
+        applyVoiceLanguage(lang, true);
       });
     }
 
-    // Initialize badge
-    updateLangBadge();
-    updatePopoverState();
-
-    // Microphone button events
     voiceBtn.addEventListener('click', function(e) {
       console.log('[Voice] Button clicked, wantsListening:', wantsListening);
       e.preventDefault();
-      // Don't open popover if already listening
+      e.stopPropagation();
       if (wantsListening) {
         stopListening(true);
-      } else if (e.altKey || e.ctrlKey) {
-        // Ctrl+Click or Alt+Click opens language selector
-        togglePopover(e);
       } else {
-        startListening();
+        toggleLanguageMenu();
       }
     });
 
-    // Close popover on outside click
-    document.addEventListener('click', function() {
-      closePopover();
+    document.addEventListener('click', function(e) {
+      if (!voiceControl || !isLangMenuOpen) return;
+      if (voiceControl.contains(e.target)) return;
+      closeLanguageMenu();
     });
 
-    // Prevent popover from closing when clicking inside it
-    var popover = document.getElementById('voiceLangPopover');
-    if (popover) {
-      popover.addEventListener('click', function(e) {
-        e.stopPropagation();
-      });
-    }
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && isLangMenuOpen) {
+        closeLanguageMenu();
+      }
+    });
 
     console.log('[Voice] Initialization complete');
   }

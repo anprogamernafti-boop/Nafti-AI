@@ -3848,18 +3848,18 @@ document.addEventListener('DOMContentLoaded', function() {
     scores['en-US'] = (t.match(en_common) || []).length;
     scores['es-ES'] = (t.match(es_common) || []).length;
     scores['pt-BR'] = (t.match(pt_common) || []).length;
-    scores['ar-SA'] = (t.match(ar_common) || []).length;
+    scores['ar-SA'] = (t.match(ar_common) || []).length * 2;  // 🔥 POIDS x2 POUR ARABE
     
-    // Retourner la langue avec le meilleur score
+    // Retourner la langue avec le meilleur score (arabe prioritaire en égalité)
     var best = Object.keys(scores).reduce(function(a, b) {
       if (scores[a] !== scores[b]) {
         return scores[a] > scores[b] ? a : b;
       }
-      // En cas d'égalité, utiliser DEFAULT_LANG comme bris d'égalité
-      return a;
+      // En cas d'égalité, ARABE a la priorité
+      return a === 'ar-SA' ? a : (b === 'ar-SA' ? b : a);
     });
     
-    return scores[best] > 0 ? best : null;
+    return scores[best] > 0 ? best : 'en-US';  // 🔥 Fallback: ANGLAIS (pas français)
   }
 
   // ── État ──────────────────────────────────────────────

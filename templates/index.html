@@ -3895,36 +3895,41 @@ document.addEventListener('DOMContentLoaded', function() {
 
     r.onresult = function(event) {
       var interimText = '';
+      var newFinalText = '';
+      
       for (var i = event.resultIndex; i < event.results.length; i++) {
         var result = event.results[i];
         if (result.isFinal) {
-          pendingTranscript += result[0].transcript + ' ';
-          // Écriture immédiate dans le champ
-          var current = messageInput.value;
-          messageInput.value = current + (current && !current.endsWith(' ') ? ' ' : '') + result[0].transcript;
-          messageInput.dispatchEvent(new Event('input'));
+          newFinalText += result[0].transcript + ' ';
         } else {
           interimText += result[0].transcript;
         }
       }
 
-      // Auto-détection sur texte interim (dès qu'on a ≥3 caractères)
-      var sample = (interimText || pendingTranscript || '').trim();
-      if (sample.length >= 3) {
-        // Détection asynchrone intelligente
-        detectLangCode(sample).then(function(detected) {
-          if (detected && detected !== detectedLang) {
-            detectedLang = detected;
-            updateBadge(detectedLang);
-            // Redémarrer avec la bonne langue (si pas déjà en cours)
-            if (!restartPending) {
+      // Ajouter UNIQUEMENT le texte final nouveau (pas de duplication)
+      if (newFinalText) {
+        pendingTranscript += newFinalText;
+        messageInput.value = pendingTranscript.trim();
+        messageInput.dispatchEvent(new Event('input'));
+      }
+
+      // Auto-détection sur texte interim (dès qu'on a ≥3 caractères) - SAUF si déjà en train de redémarrer
+      if (!restartPending) {
+        var sample = (interimText || pendingTranscript || '').trim();
+        if (sample.length >= 3) {
+          // Détection asynchrone intelligente
+          detectLangCode(sample).then(function(detected) {
+            if (detected && detected !== detectedLang) {
+              detectedLang = detected;
+              updateBadge(detectedLang);
+              // Redémarrer avec la bonne langue UNE SEULE FOIS
               restartPending = true;
               try { r.stop(); } catch(e) {}
             }
-          }
-        }).catch(function(err) {
-          console.warn('Language detection error:', err);
-        });
+          }).catch(function(err) {
+            console.warn('Language detection error:', err);
+          });
+        }
       }
     };
 
@@ -3935,7 +3940,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     r.onend = function() {
       if (restartPending && isListening) {
-        // Redémarrer avec la langue détectée
+        // Redémarrer avec la langue détectée - NE PAS RÉINITIALISER pendingTranscript
+        // pour conserver le texte déjà accumulé
         recognition = buildRecognition(detectedLang);
         attachHandlers(recognition);
         try { recognition.start(); } catch(e) { stopListening(true); }

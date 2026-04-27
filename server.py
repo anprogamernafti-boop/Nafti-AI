@@ -112,153 +112,70 @@ def verify_password(password, password_hash):
 
 def detect_language_ensemble(text):
     """
-    🧠 DÉTECTION INTELLIGENTE ENSEMBLE - SOLUTION RADICALE
+    ✅ DÉTECTION SIMPLE & FIABLE - Sans complications
     
-    ⚡ PRIORITÉ ABSOLUE: Scripts Unicode (100% fiable - retour immédiat)
-    
-    Approche multi-modèle (si pas Unicode) :
-      1. Détection par script Unicode - PRIORITÉ ABSOLUE (retour immédiat)
-      2. Détection NLP (langdetect) - analyse statistique profonde
-      3. N-grams et patterns linguistiques (analyse probabiliste)
-      4. Scoring ensemble avec vote pondéré (EGALITÉ DE POIDS)
-      5. Spécialisation pour l'ARABE (détection enrichie)
-    
-    ✅ GARANTIES: 0% de faute pour scripts unicode, Arabe 100% prioritaire
+    Priorité:
+      1. Scripts Unicode (100% fiable) → retour immédiat
+      2. langdetect (NLP robuste pour texte latin) → meilleure confiance
+      3. Fallback en anglais (langue neutre)
     """
     if not text or not text.strip():
         return {"language": "en", "confidence": 0.0, "method": "empty_text"}
     
     stripped_text = text.strip()
-    lower_text = stripped_text.lower()
-    results = {
-        "unicode": None,
-        "langdetect": None, 
-        "ngrams": None,
-        "arabic_special": None
-    }
     
-    # ─── 1. UNICODE SCRIPTS - PRIORITÉ ABSOLUE (Retour immédiat) ─────────────
-    # ✅ Arabe: Tous les blocs Unicode arabes (TRÈS COMPLET)
+    # ─── 1. UNICODE SCRIPTS (100% fiable) ────────────────────────────────
+    # Arabe
     if re.search(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u08E0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]", stripped_text):
-        return {"language": "ar", "confidence": 1.0, "method": "unicode_arabic", "note": "100% détection arabe - retour immédiat"}
+        return {"language": "ar", "confidence": 1.0, "method": "unicode_arabic"}
     
-    # Cyrillique (Russe, etc.)
+    # Cyrillique
     if re.search(r"[\u0400-\u04FF]", stripped_text):
-        return {"language": "ru", "confidence": 1.0, "method": "unicode_cyrillic", "note": "100% détection cyrillique"}
+        return {"language": "ru", "confidence": 1.0, "method": "unicode_cyrillic"}
     
     # Japonais
     if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", stripped_text):
-        return {"language": "ja", "confidence": 1.0, "method": "unicode_japanese", "note": "100% détection japonais"}
+        return {"language": "ja", "confidence": 1.0, "method": "unicode_japanese"}
     
     # Chinois
     if re.search(r"[\u4E00-\u9FFF]", stripped_text):
-        return {"language": "zh", "confidence": 1.0, "method": "unicode_chinese", "note": "100% détection chinois"}
+        return {"language": "zh", "confidence": 1.0, "method": "unicode_chinese"}
     
     # Coréen
     if re.search(r"[\uAC00-\uD7AF]", stripped_text):
-        return {"language": "ko", "confidence": 1.0, "method": "unicode_korean", "note": "100% détection coréen"}
+        return {"language": "ko", "confidence": 1.0, "method": "unicode_korean"}
     
     # Grec
     if re.search(r"[\u0370-\u03FF]", stripped_text):
-        return {"language": "el", "confidence": 1.0, "method": "unicode_greek", "note": "100% détection grec"}
+        return {"language": "el", "confidence": 1.0, "method": "unicode_greek"}
     
     # Hébreu
     if re.search(r"[\u0590-\u05FF]", stripped_text):
-        return {"language": "he", "confidence": 1.0, "method": "unicode_hebrew", "note": "100% détection hébreu"}
+        return {"language": "he", "confidence": 1.0, "method": "unicode_hebrew"}
     
-    # Hindi et scripts indiens
+    # Hindi
     if re.search(r"[\u0900-\u097F]", stripped_text):
-        return {"language": "hi", "confidence": 1.0, "method": "unicode_hindi", "note": "100% détection hindi"}
+        return {"language": "hi", "confidence": 1.0, "method": "unicode_hindi"}
     
     # Thai
     if re.search(r"[\u0E00-\u0E7F]", stripped_text):
-        return {"language": "th", "confidence": 1.0, "method": "unicode_thai", "note": "100% détection thai"}
+        return {"language": "th", "confidence": 1.0, "method": "unicode_thai"}
     
-    # Bengali
-    if re.search(r"[\u0980-\u09FF]", stripped_text):
-        return {"language": "bn", "confidence": 1.0, "method": "unicode_bengali", "note": "100% détection bengali"}
-    
-    # Kannada
-    if re.search(r"[\u0C80-\u0CFF]", stripped_text):
-        return {"language": "kn", "confidence": 1.0, "method": "unicode_kannada", "note": "100% détection kannada"}
-    
-    # Thaï
-    if re.search(r"[\u0E00-\u0E7F]", stripped_text):
-        return {"language": "th", "confidence": 1.0, "method": "unicode_thai", "note": "100% détection thai"}
-    
-    # Si script Unicode détecté, retourner immédiatement
-    if results["unicode"]:
-        lang, conf = results["unicode"]
-        return {"language": lang, "confidence": conf, "method": "unicode_script", "details": results}
-    
-    # ─── 2. LANGDETECT (NLP probabiliste) ──────────────────────────────────
+    # ─── 2. LANGDETECT (Pour texte latin: EN, FR, ES, DE, PT, etc.) ──────
     try:
         detected = detect(stripped_text)
-        # Normaliser les codes (zh-cn → zh, etc.)
-        base = detected.split('-')[0] if '-' in detected else detected
-        results["langdetect"] = (base, 0.85)  # Bonne confiance mais pas parfait
+        base_lang = detected.split('-')[0] if '-' in detected else detected
+        return {"language": base_lang, "confidence": 0.85, "method": "langdetect"}
     except:
-        results["langdetect"] = None
+        pass
     
-    # ─── 3. N-GRAMS & PATTERNS (Analyse statistique sophistiquée) ───────────
-    # Analyser les n-grams (séquences de caractères) typiques de chaque langue
-    
-    ngram_scores = {
-        "fr": _score_french_ngrams(stripped_text, lower_text),
-        "en": _score_english_ngrams(stripped_text, lower_text),
-        "es": _score_spanish_ngrams(stripped_text, lower_text),
-        "de": _score_german_ngrams(stripped_text, lower_text),
-        "pt": _score_portuguese_ngrams(stripped_text, lower_text),
-        "it": _score_italian_ngrams(stripped_text, lower_text),
-        "ar": _score_arabic_ngrams(stripped_text, lower_text),
-    }
-    
-    best_ngram_lang = max(ngram_scores, key=ngram_scores.get)
-    best_ngram_score = ngram_scores[best_ngram_lang]
-    if best_ngram_score > 0:
-        results["ngrams"] = (best_ngram_lang, min(0.75, best_ngram_score / 100))
-    
-    # ─── 4. ARABE SPÉCIAL (Détection renforcée) ───────────────────────────
-    arabic_confidence = _score_arabic_special(stripped_text, lower_text)
-    if arabic_confidence > 0.3:
-        results["arabic_special"] = ("ar", arabic_confidence)
-    
-    # ─── 5. VOTE D'ENSEMBLE (EGALITÉ DE POIDS - SANS BIAIS) ────────────────
-    # ✅ SOLUTION RADICALE: Tous les poids égaux, pas de fallback français
-    votes = {}
-    weights = {
-        "langdetect": 1.0,      # Égalité pour tous
-        "ngrams": 1.0,          # Égalité pour tous
-        "arabic_special": 1.0   # Égalité pour l'arabe
-    }
-    
-    for method, result in results.items():
-        if result is not None and result[0]:  # Vérifier que result n'est pas None et contient (lang, conf)
-            lang, conf = result
-            if lang not in votes:
-                votes[lang] = []
-            votes[lang].append((method, conf * weights.get(method, 0.5)))
-    
-    if not votes:
-        # Fallback SANS BIAIS: anglais neutre (pas de langue par défaut)
-        return {"language": "en", "confidence": 0.3, "method": "no_detection", "details": results}
-    
-    # Sélectionner la langue avec le meilleur score moyen
-    lang_scores = {}
-    for lang, scores_list in votes.items():
-        lang_scores[lang] = sum(s[1] for s in scores_list) / len(scores_list)
-    
-    best_lang = max(lang_scores, key=lang_scores.get)
-    best_score = lang_scores[best_lang]
-    final_confidence = min(1.0, best_score / 2.0)  # Normaliser
-    
-    return {
-        "language": best_lang,
-        "confidence": min(1.0, final_confidence),
-        "method": "ensemble",
-        "votes": votes,
-        "details": results
-    }
+    # ─── 3. FALLBACK: Anglais (langue neutre, pas français) ───────────────
+    return {"language": "en", "confidence": 0.3, "method": "fallback_english"}
+
+def detect_language(text):
+    """Simple wrapper - utilise l'ensemble pour les meilleurs résultats"""
+    result = detect_language_ensemble(text)
+    return result["language"]
 
 def _score_french_ngrams(text, lower_text):
     """Scorer français basé sur n-grams caractéristiques"""

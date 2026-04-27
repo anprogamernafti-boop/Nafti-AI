@@ -3761,8 +3761,10 @@ document.addEventListener('DOMContentLoaded', function() {
     'fr-FR': '🇫🇷 FR', 'en-US': '🇺🇸 EN', 'es-ES': '🇪🇸 ES', 'pt-BR': '🇧🇷 PT'
   };
 
-  // 🧠 DÉTECTION INTELLIGENTE - Appelle le backend pour analyse NLP
-  async function detectLangCode(text) {
+  // ── État ──────────────────────────────────────────────
+  var isListening = false;
+  var recognition = null;
+  var lastProcessedIndex = -1;  // 🔥 Tracker pour éviter les doublons
     if (!text || text.trim().length < 2) return null;
     
     try {
@@ -3893,6 +3895,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // ── État ──────────────────────────────────────────────
   var isListening = false;
   var recognition = null;
+  var lastProcessedIndex = -1;  // 🔥 Tracker pour éviter les doublons
 
   function buildRecognition(lang) {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -3914,40 +3917,60 @@ document.addEventListener('DOMContentLoaded', function() {
   function startListening() {
     if (isListening) return;
     
+    lastProcessedIndex = -1;  // 🔥 Reset à chaque démarrage
     var lockedLang = getVoiceLang();
     recognition = buildRecognition(lockedLang);
 
     recognition.onstart = function() {
       isListening = true;
+      lastProcessedIndex = -1;  // 🔥 Reset au démarrage
       voiceBtn.classList.add('listening');
       voiceBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
     };
 
     recognition.onresult = function(event) {
-      for (var i = event.resultIndex; i < event.results.length; i++) {
+      // 🔥 CRUCIAL: Traiter UNIQUEMENT les résultats nouveaux depuis la dernière fois
+      for (var i = Math.max(lastProcessedIndex + 1, 0); i < event.results.length; i++) {
         var result = event.results[i];
-        if (!result.isFinal) continue;
+        
+        // On traite finaux ET intérims, mais on s'engage seulement sur les finaux
+        if (!result.isFinal) {
+          // Les intérims, on les affiche mais on garde pas
+          continue;
+        }
 
+        // ✅ Résultat FINAL: on le traite et l'ajoute
         var transcript = (result[0].transcript || '').trim();
-        if (!transcript) continue;
+        if (!transcript) {
+          lastProcessedIndex = i;  // Même si vide, on marque comme traité
+          continue;
+        }
 
-        // 🔒 ARABE: validation supplémentaire - rejeter si texte non-arabe
+        // 🔒 ARABE: validation - rejeter si texte non-arabe
         if (lockedLang.startsWith('ar')) {
           transcript = normalizeArabic(transcript);
           if (!isArabicText(transcript)) {
-            console.warn('[Voice] Transcript rejeté: langue attendue arabe, texte non arabe détecté');
+            console.log('[Voice] Rejeté: texte non-arabe reçu');
+            lastProcessedIndex = i;  // Marquer comme traité même si rejeté
             continue;
           }
         }
 
-        var current = messageInput.value;
-        messageInput.value = current + (current && !current.endsWith(' ') ? ' ' : '') + transcript;
+        // ✅ Texte valide: l'ajouter au message
+        var current = messageInput.value.trim();
+        if (current && !current.endsWith(' ')) {
+          current += ' ';
+        }
+        messageInput.value = current + transcript;
         messageInput.dispatchEvent(new Event('input'));
+        
+        lastProcessedIndex = i;  // 🔥 Marquer cet index comme traité
       }
     };
 
     recognition.onerror = function(e) {
       if (e.error !== 'no-speech' && e.error !== 'aborted') {
+        console.error('[Voice] Error:', e.error);
         stopListening(true);
       }
     };
@@ -3967,6 +3990,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function stopListening(force) {
     if (!isListening && !force) return;
     isListening = false;
+    lastProcessedIndex = -1;  // 🔥 Reset à l'arrêt
     voiceBtn.classList.remove('listening');
     voiceBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
     try { if (recognition) recognition.stop(); } catch(e) {}

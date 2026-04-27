@@ -3867,6 +3867,7 @@ document.addEventListener('DOMContentLoaded', function() {
   var detectedLang    = DEFAULT_LANG;  // langue confirmée par interim
   var pendingTranscript = '';          // texte accumulé (finals)
   var restartPending  = false;         // redémarrage en cours
+  var lastDetectedLang = DEFAULT_LANG; // Dernière langue détectée (pour éviter les redémarrages répétés)
   var recognition     = null;
 
   function buildRecognition(lang) {
@@ -3913,23 +3914,28 @@ document.addEventListener('DOMContentLoaded', function() {
         messageInput.dispatchEvent(new Event('input'));
       }
 
-      // Auto-détection sur texte interim (dès qu'on a ≥3 caractères) - SAUF si déjà en train de redémarrer
-      if (!restartPending) {
-        var sample = (interimText || pendingTranscript || '').trim();
-        if (sample.length >= 3) {
-          // Détection asynchrone intelligente
-          detectLangCode(sample).then(function(detected) {
-            if (detected && detected !== detectedLang) {
+      // ✅ IMPORTANT: Détecter SEULEMENT après avoir du texte FINALISÉ
+      // Cela évite les redémarrages constants et les pertes de texte
+      if (newFinalText) {
+        // Analyser le texte finalisé pour détecter la langue
+        detectLangCode(newFinalText).then(function(detected) {
+          if (detected && detected !== lastDetectedLang) {
+            lastDetectedLang = detected;  // Mémoriser la dernière détection
+            
+            // Changer la langue SEULEMENT si vraiment différente
+            if (detected !== detectedLang) {
               detectedLang = detected;
               updateBadge(detectedLang);
-              // Redémarrer avec la bonne langue UNE SEULE FOIS
-              restartPending = true;
-              try { r.stop(); } catch(e) {}
+              // Redémarrer avec la bonne langue
+              if (!restartPending) {
+                restartPending = true;
+                try { r.stop(); } catch(e) {}
+              }
             }
-          }).catch(function(err) {
-            console.warn('Language detection error:', err);
-          });
-        }
+          }
+        }).catch(function(err) {
+          console.warn('Language detection error:', err);
+        });
       }
     };
 
@@ -3954,6 +3960,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function startListening() {
     if (isListening) return;
     pendingTranscript = '';
+    lastDetectedLang = DEFAULT_LANG;  // Réinitialiser la détection précédente
     detectedLang = DEFAULT_LANG;
     recognition = buildRecognition(detectedLang);
     attachHandlers(recognition);

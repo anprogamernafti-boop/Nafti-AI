@@ -1,6 +1,5 @@
-from flask import Flask, request, jsonify, send_file, send_from_directory, redirect, url_for, render_template, flash, session, Response, stream_with_context
+from flask import Flask, request, jsonify, send_file, send_from_directory, redirect, url_for, render_template, flash, session
 from flask_cors import CORS
-from flask_compress import Compress
 from dotenv import load_dotenv
 import requests
 import os
@@ -13,7 +12,8 @@ import time
 import re
 from PIL import Image
 from io import BytesIO
-from langdetect import detect, LangDetectException
+from langdetect import detect, LangDetectException, DetectorFactory
+DetectorFactory.seed = 0   # Résultats reproductibles
 
 # Autoriser OAuth en HTTP pour le développement local
 os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT', '1')
@@ -30,9 +30,7 @@ print("[STARTUP] Flask app created")
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'supersecret')
 app.config['SESSION_TYPE'] = 'filesystem'
 CORS(app)
-Compress(app)  # Enable gzip compression
 print("[STARTUP] CORS enabled")
-print("[STARTUP] Gzip compression enabled")
 
 # File-based user storage
 USERS_FILE = Path('users.json')
@@ -109,66 +107,199 @@ def verify_password(password, password_hash):
     return hash_password(password) == password_hash
 
 def detect_language(text):
-    """Détection de langue améliorée et plus précise"""
+    """Détection de langue automatique — aucune sélection manuelle requise.
+
+    Ordre de priorité :
+      1. Scripts non-latins  → détection instantanée et sûre à 100 %
+      2. Accents 100 % non-ambigus (ñ, ã, ä, ß…) → une seule langue possible
+      3. langdetect (NLP) dès 1 mot → démêle FR/PT/IT/EN avec précision ~95 %
+      4. Accents ambigus pour 1 seul mot court sans langdetect
+      5. Mots-clés pondérés  → filet de sécurité pour textes ultra-courts
+      6. Fallback fr         → langue par défaut de l'app
+    """
     if not text or not text.strip():
-        return "en"
+        return "fr"
 
     stripped_text = text.strip()
 
-    # 1. Scripts non-latins (détection instantanée et fiable)
-    if re.search(r"[\u0600-\u06FF]", stripped_text):  # Arabe
-        return "ar"
-    if re.search(r"[\u0400-\u04FF]", stripped_text):  # Cyrillique (Russe)
-        return "ru"
-    if re.search(r"[\u4E00-\u9FFF]", stripped_text):  # Chinois
-        return "zh"
-    if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", stripped_text):  # Japonais
-        return "ja"
-    if re.search(r"[\uAC00-\uD7AF]", stripped_text):  # Coréen
-        return "ko"
-    if re.search(r"[\u0370-\u03FF]", stripped_text):  # Grec
-        return "el"
-    if re.search(r"[\u0590-\u05FF]", stripped_text):  # Hébreu
-        return "he"
+    # ── 1. Scripts non-latins ────────────────────────────────────────────────
+    if re.search(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]", stripped_text):
+        return "ar"   # Arabe (tous blocs Unicode)
+    if re.search(r"[\u0400-\u04FF]", stripped_text):
+        return "ru"   # Cyrillique (russe, ukrainien…)
+    # Japonais AVANT chinois : hiragana/katakana sont uniquement japonais
+    if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", stripped_text):
+        return "ja"   # Japonais (hiragana + katakana)
+    if re.search(r"[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]", stripped_text):
+        return "zh"   # Chinois (simplifié / traditionnel / CJK compat.)
+    if re.search(r"[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]", stripped_text):
+        return "ko"   # Coréen (Hangul)
+    if re.search(r"[\u0370-\u03FF\u1F00-\u1FFF]", stripped_text):
+        return "el"   # Grec (+ grec étendu)
+    if re.search(r"[\u0590-\u05FF\uFB1D-\uFB4F]", stripped_text):
+        return "he"   # Hébreu
+    if re.search(r"[\u0900-\u097F]", stripped_text):
+        return "hi"   # Devanagari (hindi, marathi…)
+    if re.search(r"[\u0E00-\u0E7F]", stripped_text):
+        return "th"   # Thaï
+    # Turc : caractères spécifiques (sans re.I → évite les faux positifs avec 'i' latin)
+    if re.search(r"[ğışĞŞ\u0130\u0131]", stripped_text):
+        return "tr"
 
-    # 2. Accents caractéristiques (très fiable pour les langues latines)
-    if re.search(r"[àâäçéèêëîïôöùûüÿœ]", stripped_text, flags=re.IGNORECASE):
-        return "fr"
-    if re.search(r"[ñáéíóúü¿¡]", stripped_text, flags=re.IGNORECASE):
+    # ── 2. Accents 100 % non-ambigus ────────────────────────────────────────
+    # Espagnol : ñ, ¿, ¡ → absents de toutes les autres langues latines
+    if re.search(r"[ñ¿¡]", stripped_text):
         return "es"
-    if re.search(r"[ãõáéíóúç]", stripped_text, flags=re.IGNORECASE):
+    # Portugais : ã, õ → exclusifs au portugais (ã ≠ ā latin)
+    if re.search(r"[ãõ]", stripped_text):
         return "pt"
-    if re.search(r"[äöüß]", stripped_text, flags=re.IGNORECASE):
+    # Allemand : ä, ö, ü, ß → exclusifs à l'allemand
+    if re.search(r"[äöüß]", stripped_text):
         return "de"
+    # Polonais : ł, ź, ż, ą, ę, ć, ń, ś, ó (combinaison unique)
+    if re.search(r"[łźżąęćńś]", stripped_text):
+        return "pl"
+    # Roumain : ș, ț (virgule sous lettre), ă, â diacritiques exclusifs au roumain
+    if re.search(r"[șțȘȚăĂ]", stripped_text):
+        return "ro"
+    # Tchèque / Slovaque : ů, ě, č, š, ř, ž, ď, ť, ň
+    if re.search(r"[ůěřďť]", stripped_text):
+        return "cs"
+    # Scandinave : å → danois/norvégien/suédois
+    if re.search(r"[åÅ]", stripped_text):
+        return "sv"   # par défaut suédois (le plus utilisé)
 
-    # 3. Utiliser langdetect pour les textes longs
+    # ── 3. langdetect (NLP) — dès 1 mot pour démêler FR/PT/IT/EN ────────────
     try:
-        if len(stripped_text.split()) >= 4:
+        words = stripped_text.split()
+        if len(words) >= 1:  # Activé dès le premier mot
             detected = detect(stripped_text)
-            if detected in ['fr', 'en', 'es', 'de', 'it', 'pt', 'ru', 'ar']:
-                return detected
-    except LangDetectException:
+            supported = {
+                'fr', 'en', 'es', 'de', 'it', 'pt', 'ru', 'ar',
+                'zh-cn', 'zh-tw', 'ja', 'ko', 'nl', 'tr', 'pl',
+                'sv', 'da', 'fi', 'cs', 'hu', 'ro', 'el', 'he',
+                'hi', 'th', 'vi', 'id', 'ms', 'uk', 'ca', 'gl'
+            }
+            if detected in supported:
+                return "zh" if detected.startswith("zh") else detected
+            # Gestion des variantes de codes (ex: zh-cn → zh)
+            base = detected.split('-')[0]
+            if base in supported:
+                return base
+    except Exception:
         pass
 
-    # 4. Mots-clés pour les textes courts (amélioré avec greetings et mots courants)
-    lower_text = stripped_text.lower()
-    
-    # Mots français (greetings + mots courants)
-    fr_words = ['salut', 'bonjour', 'coucou', 'au revoir', 'merci', 'oui', 'non', 'je', 'tu', 'nous', 'vous', 'ils', 'elles', 'une', 'des', 'est', 'sont', 'être', 'cette', 'celui', 'celle', 'mais', 'donc', 'aussi', 'très', 'bien', 'comment', 'pourquoi', 'quand', 'où', 'faire', 'pouvoir', 'devoir', 'vouloir', 'aller', 'venir', 'donner', 'prendre', 'mettre', 'sans', 'avec']
-    fr_count = sum(1 for word in fr_words if re.search(r'\b' + re.escape(word) + r'\b', lower_text))
-    
-    # Mots anglais (greetings + common words)
-    en_words = ['hi', 'hello', 'hey', 'goodbye', 'bye', 'thanks', 'thank you', 'yes', 'no', 'please', 'sorry', 'sure', 'okay', 'ok', 'help', 'the', 'is', 'are', 'am', 'be', 'to', 'of', 'and', 'in', 'that', 'have', 'has', 'for', 'not', 'on', 'with', 'you', 'do', 'does', 'this', 'but', 'what', 'how', 'why', 'can', 'could', 'would', 'should', 'will']
-    en_count = sum(1 for word in en_words if re.search(r'\b' + re.escape(word) + r'\b', lower_text))
-    
-    # Retourner la langue avec le plus de correspondances
-    if fr_count > en_count and fr_count >= 1:
+    # ── 4. Accents ambigus pour textes courts (sans résultat langdetect fiable) ─
+    # Français exclusif : œ, æ, â, ê, î, ô, û, ë, ï, ù, ÿ
+    if re.search(r"[àâçèêëîïôùûüÿœæ]", stripped_text, flags=re.IGNORECASE):
         return "fr"
-    if en_count > fr_count and en_count >= 1:
-        return "en"
-    
-    # 5. Fallback : anglais (plus universel que français)
-    return "en"
+    # Accent aigu ambigu (á, é, í, ó, ú) : présent en ES, PT, IT
+    # → résolution par mots-clés avant de tomber sur un défaut
+    if re.search(r"[áéíóú]", stripped_text, flags=re.IGNORECASE):
+        lower_accented = stripped_text.lower()
+        # Portugais : mots très distinctifs (tudo, você, não, obrigado…)
+        pt_signals = re.findall(
+            r"\b(tudo|voce|nao|obrigado|obrigada|ola|pois|embora|tenho|temos"
+            r"|tambem|isso|aqui|entao|muito|agora|estou|estao|posso|podes)\b",
+            lower_accented)
+        # Espagnol : mots très distinctifs (hola, hay, también, vosotros…)
+        es_signals = re.findall(
+            r"\b(hola|hay|vosotros|ellos|ellas|del|bueno|claro|vale|pues"
+            r"|tiene|tienes|tienen|quiero|quieres|puedo|puedes|pueden|estoy|estas|estan)\b",
+            lower_accented)
+        # Italien : mots distinctifs (ciao, sono, avere, essere…)
+        it_signals = re.findall(
+            r"\b(ciao|sono|avere|essere|grazie|scusa|prego|bene|tutto|molto"
+            r"|ho|hai|ha|abbiamo|voglio|vuoi|siamo|cosa|chi|dove)\b",
+            lower_accented)
+        if len(pt_signals) >= len(es_signals) and len(pt_signals) >= len(it_signals) and pt_signals:
+            return "pt"
+        if len(it_signals) > len(es_signals) and len(it_signals) > len(pt_signals):
+            return "it"
+        return "es"  # défaut pour les accents aigus sans contexte
+    # Italien : ì exclusif (più, così…)
+    if re.search(r"[ìÌ]", stripped_text, flags=re.IGNORECASE):
+        return "it"
+
+    # ── 5. Mots-clés pondérés (textes très courts ≤ 1 mot, sans accents) ────
+    lower_text = stripped_text.lower()
+
+    kw = {
+        # Français : mots grammaticaux + salutations très fréquents
+        "fr": r"\b(je|tu|il|elle|nous|vous|ils|elles|un|une|des|les|le|la|est|sont"
+              r"|avec|pour|dans|sur|par|mais|donc|car|or|ni|si|que|qui|quoi"
+              r"|salut|bonjour|bonsoir|coucou|merci|oui|non|svp|ici|tres|bien|aussi|alors"
+              r"|comment|pourquoi|quand|faire|avoir|aller|vouloir|pouvoir|devoir|venir|voir"
+              r"|sans|vers|sous|entre|depuis|avant|apres|toujours|jamais|encore|deja"
+              r"|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|votre|leur|leurs)\b",
+
+        # Anglais : mots fréquents, évite les collisions avec FR (a, an, or, for…)
+        "en": r"\b(i|you|he|she|we|they|the|is|are|was|were|be|been|being"
+              r"|have|has|had|do|does|did|will|would|could|should|may|might|shall"
+              r"|and|but|not|this|that|these|those|with|from|into|about|just|also"
+              r"|hi|hello|hey|thanks|thank|yes|no|please|sorry|okay|ok|sure|right"
+              r"|what|who|where|when|why|how|can|my|your|his|her|our|their|its"
+              r"|get|got|go|come|know|think|make|take|want|need|see|look|use|find)\b",
+
+        # Espagnol : mots exclusifs (évite les collisions avec PT)
+        "es": r"\b(yo|nosotros|vosotros|ellos|ellas|los|las|del|al"
+              r"|con|para|por|pero|aunque|mientras|porque|entonces"
+              r"|hola|adios|gracias|por favor|perdon|bueno|claro|vale|pues"
+              r"|hacer|ir|venir|tener|estar|ser|poder|querer|deber|saber|ver|dar)\b",
+
+        # Allemand : mots grammaticaux typiques + salutations sans accents
+        "de": r"\b(ich|du|er|wir|ihr|der|die|das|ein|eine|und|ist|sind|war|waren"
+              r"|mit|fur|auf|an|von|zu|bei|nach|uber|unter|vor|hinter|neben"
+              r"|hallo|danke|ja|nein|bitte|wie|was|wo|wer|warum|wann|schon|noch"
+              r"|morgen|abend|guten|gut|tag|nacht|tschuss|entschuldigung"
+              r"|machen|gehen|kommen|haben|sein|werden|konnen|mussen|wollen|sagen)\b",
+
+        # Portugais : mots exclusifs vs espagnol (nós, eles, não, mas, porque…)
+        "pt": r"\b(eu|nos|eles|elas|um|uma|os|as|do|da|dos|das|num|numa"
+              r"|com|para|em|por|mas|se|como|quando|porque|pois|embora"
+              r"|ola|obrigado|obrigada|sim|nao|por favor|desculpe|tudo|bem|voce"
+              r"|fazer|ir|vir|ter|estar|ser|poder|querer|dever|saber|ver|dar"
+              r"|tenho|tens|tem|temos|quero|queres|posso|podes|estou|estao|isso|tambem)\b",
+
+        # Italien : mots exclusifs
+        "it": r"\b(io|lui|lei|noi|loro|il|gli|uno|una|del|della|degli|delle"
+              r"|con|per|su|di|che|ma|se|come|quando|perche|quindi|pero|anche"
+              r"|ciao|grazie|scusa|prego|si|no|per favore|bene|tutto|molto"
+              r"|fare|andare|venire|avere|essere|potere|volere|dovere|sapere|vedere|dare)\b",
+
+        # Néerlandais : mots typiques
+        "nl": r"\b(ik|jij|jij|hij|zij|wij|jullie|de|het|een|zijn|was|waren"
+              r"|met|voor|op|aan|van|naar|bij|over|door|onder|maar|ook|nog|al"
+              r"|hallo|dag|dank|ja|nee|alsjeblieft|sorry|goed|hoe|wat|wie|waar|waarom"
+              r"|maken|gaan|komen|hebben|zijn|worden|kunnen|moeten|willen|zeggen)\b",
+
+        # Arabe romanisé (translittéré) → très courant dans le Maghreb
+        "ar": r"\b(marhaba|ahlan|salamalaikum|shukran|afwan|inshallah|habibi|yalla"
+              r"|kifak|kifek|wesh|labas|bghit|nta|nti|hna|ntuma|ana|hwa|hya"
+              r"|choukran|mersi|saha|baraka|mabrook|ach|wach|fain|mnin|bikhir)\b",
+    }
+
+    scores = {}
+    for lang, pattern in kw.items():
+        matches = re.findall(pattern, lower_text, flags=re.IGNORECASE)
+        scores[lang] = len(matches)
+
+    if scores:
+        best_lang = max(scores, key=scores.get)
+        # Seuil minimal de 1 correspondance + avantage FR en cas d'ex-aequo
+        if scores[best_lang] >= 1:
+            # En cas d'égalité, préférer le français (langue par défaut de l'app)
+            top_score = scores[best_lang]
+            candidates = [l for l, s in scores.items() if s == top_score]
+            if len(candidates) == 1:
+                return best_lang
+            elif "fr" in candidates:
+                return "fr"
+            else:
+                return candidates[0]
+
+    # ── 6. Fallback ──────────────────────────────────────────────────────────
+    return "fr"  # Langue par défaut de l'app
 
 
 def detect_tunisian_dialect(text):
@@ -1133,259 +1264,6 @@ def get_session_data(session_id):
     if not sess:
         return jsonify({"error": "Not found"}), 404
     return jsonify(sess)
-
-
-# ========== SSE Streaming Endpoint ==========
-@app.route("/api/chat/stream", methods=["POST"])
-def chat_stream():
-    """Stream AI response tokens in real-time using Server-Sent Events (SSE)"""
-    if 'user' not in session:
-        return jsonify({"error": "Login to use AI features"}), 401
-    if not GROQ_API_KEY:
-        return jsonify({"error": "Clé API Groq manquante"}), 500
-
-    data = request.get_json()
-    message = data.get("message", "").strip()
-    session_id = data.get("session_id")
-    
-    if not message:
-        return jsonify({"error": "Message requis"}), 400
-
-    user = session.get('user')
-    sess = find_session(user, session_id)
-    if not sess:
-        sess = create_session_for_user(user)
-        session_id = sess['id']
-
-    def generate():
-        try:
-            # Build messages for API
-            api_messages = sess.get('messages', [])
-            api_messages = [msg for msg in api_messages if msg.get('role') != 'system']
-            api_messages.append({"role": "user", "content": message})
-            
-            # Detect language
-            detected_lang = detect_language(message)
-            lang_instruction = get_language_instruction(detected_lang, message)
-            system_content = f"Tu es Nafti AI, un assistant intelligent et bienveillant. {lang_instruction} Utilise le format Markdown. Sois concis et utile."
-            
-            api_messages.insert(0, {"role": "system", "content": system_content})
-            
-            # Call Groq API with streaming
-            response = requests.post(
-                GROQ_URL,
-                headers={
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": GROQ_MODEL,
-                    "messages": api_messages,
-                    "max_tokens": 2048,
-                    "temperature": 0.7,
-                    "stream": True
-                },
-                timeout=60,
-                stream=True
-            )
-            
-            response.raise_for_status()
-            full_response = ""
-            
-            # Parse streaming response
-            for line in response.iter_lines():
-                if line:
-                    line = line.decode('utf-8')
-                    if line.startswith('data: '):
-                        try:
-                            chunk_data = json.loads(line[6:])
-                            delta = chunk_data.get('choices', [{}])[0].get('delta', {})
-                            content = delta.get('content', '')
-                            if content:
-                                full_response += content
-                                # Send SSE event with token
-                                yield f"data: {json.dumps({'token': content, 'type': 'chunk'})}\n\n"
-                        except json.JSONDecodeError:
-                            pass
-            
-            # Save to history
-            if full_response:
-                sess['messages'].append({"role": "user", "content": message})
-                sess['messages'].append({"role": "assistant", "content": full_response})
-                if not sess.get('title') or sess.get('title') == 'Nouvelle conversation':
-                    sess['title'] = message[:80]
-                
-                histories = load_history()
-                histories[user] = histories.get(user, [])
-                for idx, s in enumerate(histories.get(user, [])):
-                    if s.get('id') == session_id:
-                        histories[user][idx] = sess
-                        break
-                save_history(histories)
-            
-            # Send completion event
-            yield f"data: {json.dumps({'type': 'done'})}\n\n"
-            
-        except Exception as e:
-            print(f"Stream error: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
-
-    return Response(stream_with_context(generate()), mimetype='text/event-stream', headers={
-        'Cache-Control': 'no-cache',
-        'X-Accel-Buffering': 'no',
-        'Access-Control-Allow-Origin': '*'
-    })
-
-
-# ========== Export Conversation ==========
-@app.route("/api/export", methods=["POST"])
-def export_conversation():
-    """Export conversation as PDF or TXT"""
-    if 'user' not in session:
-        return jsonify({"error": "Login required"}), 401
-    
-    data = request.get_json()
-    session_id = data.get("session_id")
-    export_format = data.get("format", "txt")  # "txt" or "pdf"
-    
-    user = session.get('user')
-    sess = find_session(user, session_id)
-    if not sess:
-        return jsonify({"error": "Session not found"}), 404
-    
-    messages = sess.get('messages', [])
-    
-    # Format content
-    content = f"Conversation: {sess.get('title', 'Sans titre')}\n"
-    content += f"Date: {sess.get('created_at', 'N/A')}\n"
-    content += "=" * 60 + "\n\n"
-    
-    for msg in messages:
-        role = msg.get('role', '').upper()
-        text = msg.get('content', '')
-        if isinstance(text, str):
-            content += f"{role}:\n{text}\n\n"
-    
-    if export_format == "pdf":
-        try:
-            from reportlab.lib.pagesizes import letter
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from io import BytesIO
-            
-            buffer = BytesIO()
-            doc = SimpleDocTemplate(buffer, pagesize=letter)
-            styles = getSampleStyleSheet()
-            story = []
-            
-            # Title
-            title_style = ParagraphStyle(
-                'CustomTitle',
-                parent=styles['Heading1'],
-                fontSize=16,
-                spaceAfter=10,
-                textColor='#0A8F94'
-            )
-            story.append(Paragraph(sess.get('title', 'Conversation'), title_style))
-            story.append(Spacer(1, 0.3 * 72 / 72))
-            
-            # Messages
-            for msg in messages:
-                role = msg.get('role', '').upper()
-                text = msg.get('content', '')
-                if isinstance(text, str):
-                    msg_style = ParagraphStyle(
-                        f'Style_{role}',
-                        parent=styles['Normal'],
-                        fontSize=10,
-                        spaceAfter=6,
-                        leftIndent=10 if role == 'USER' else 0
-                    )
-                    # Truncate very long messages for PDF
-                    display_text = text[:500] + "..." if len(text) > 500 else text
-                    story.append(Paragraph(f"<b>{role}:</b> {display_text}", msg_style))
-                    story.append(Spacer(1, 0.1 * 72 / 72))
-            
-            doc.build(story)
-            buffer.seek(0)
-            return send_file(
-                buffer,
-                mimetype='application/pdf',
-                as_attachment=True,
-                download_name=f"conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-            )
-        except ImportError:
-            return jsonify({"error": "PDF export requires reportlab"}), 400
-    else:
-        # TXT export
-        buffer = BytesIO(content.encode('utf-8'))
-        return send_file(
-            buffer,
-            mimetype='text/plain',
-            as_attachment=True,
-            download_name=f"conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        )
-
-
-# ========== Share Conversation ==========
-SHARES_FILE = Path('shares.json')
-
-def load_shares():
-    if SHARES_FILE.exists():
-        with open(SHARES_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {}
-
-def save_shares(data):
-    with open(SHARES_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f)
-
-@app.route("/api/share", methods=["POST"])
-def share_conversation():
-    """Create a unique shareable link for a conversation"""
-    if 'user' not in session:
-        return jsonify({"error": "Login required"}), 401
-    
-    data = request.get_json()
-    session_id = data.get("session_id")
-    
-    user = session.get('user')
-    sess = find_session(user, session_id)
-    if not sess:
-        return jsonify({"error": "Session not found"}), 404
-    
-    # Generate unique share ID
-    share_id = str(uuid.uuid4())[:12]
-    
-    shares = load_shares()
-    shares[share_id] = {
-        "session": sess,
-        "user": user,
-        "created_at": datetime.now().isoformat(),
-        "title": sess.get('title', 'Sans titre')
-    }
-    save_shares(shares)
-    
-    return jsonify({
-        "share_id": share_id,
-        "share_url": f"/shared/{share_id}"
-    })
-
-
-@app.route("/shared/<share_id>")
-def view_shared_conversation(share_id):
-    """View a shared conversation"""
-    shares = load_shares()
-    share = shares.get(share_id)
-    
-    if not share:
-        return render_template("404.html"), 404
-    
-    return render_template(
-        "shared.html",
-        title=share.get('title', 'Conversation partagée'),
-        messages=share.get('session', {}).get('messages', [])
-    )
 
 
 if __name__ == "__main__":

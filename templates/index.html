@@ -827,87 +827,24 @@ animation: pulse 1.5s infinite;
 50% { opacity: 0.7; }
 }
 
-/* Language selector button & dropdown */
-.lang-btn {
-width: 38px; height: 38px;
-border-radius: 50%;
-border: 1.5px solid var(--border);
-background: var(--bg-chat);
-color: var(--text-secondary);
-display: flex;
-align-items: center;
-justify-content: center;
-cursor: pointer;
-flex-shrink: 0;
-font-size: 14px;
-font-weight: 700;
-letter-spacing: -0.5px;
-transition: all .2s ease;
-position: relative;
-margin-left: 4px;
-}
-.lang-btn:hover {
-border-color: var(--accent);
-color: var(--accent);
-background: var(--accent-glow);
-}
-.lang-btn:active { transform: scale(.92); }
-
-.lang-dropdown {
-display: none;
+/* Voice lang indicator (auto-detect badge) */
+.voice-lang-badge {
 position: absolute;
-bottom: calc(100% + 8px);
-left: 0;
-background: var(--bg-chat);
-border: 1.5px solid var(--border);
-border-radius: var(--radius-md);
-box-shadow: var(--shadow-lg);
-padding: 8px 0;
-min-width: 200px;
-z-index: 200;
-animation: modalSlideUp .2s cubic-bezier(.22,1,.36,1);
+top: -5px;
+right: -5px;
+font-size: 9px;
+font-weight: 800;
+background: var(--accent);
+color: #fff;
+border-radius: 6px;
+padding: 1px 4px;
+line-height: 1.4;
+pointer-events: none;
+opacity: 0;
+transition: opacity .2s ease;
 }
-.lang-dropdown.active { display: block; }
-
-.lang-dropdown-title {
-font-size: 11px;
-font-weight: 700;
-color: var(--text-muted);
-text-transform: uppercase;
-letter-spacing: .6px;
-padding: 4px 14px 8px;
-}
-
-.lang-dropdown-item {
-display: flex;
-align-items: center;
-gap: 10px;
-padding: 9px 14px;
-cursor: pointer;
-font-size: 13px;
-font-weight: 500;
-color: var(--text-primary);
-transition: background .15s;
-}
-.lang-dropdown-item:hover {
-background: var(--accent-glow);
-color: var(--accent);
-}
-.lang-dropdown-item.selected {
-color: var(--accent);
-font-weight: 700;
-}
-.lang-dropdown-item .lang-flag {
-font-size: 18px;
-line-height: 1;
-}
-.lang-dropdown-item .lang-check {
-margin-left: auto;
-font-size: 12px;
-color: var(--accent);
-display: none;
-}
-.lang-dropdown-item.selected .lang-check { display: inline; }
+.voice-btn { position: relative; }
+.voice-btn.listening .voice-lang-badge { opacity: 1; }
 
 /* Toast notifications */
 .toast {
@@ -2165,36 +2102,7 @@ transform: translateY(-1px);
 <i class="fa-solid fa-microphone"></i>
 </button>
 
-<!-- Language selector for voice input -->
-<div style="position:relative;" id="langBtnWrapper">
-<button class="lang-btn" id="langBtn" title="Langue de reconnaissance vocale">
-<span id="langBtnLabel">FR</span>
-</button>
-<div class="lang-dropdown" id="langDropdown">
-<div class="lang-dropdown-title">Langue vocale</div>
-<div class="lang-dropdown-item selected" data-lang="fr-FR" data-label="FR">
-  <span class="lang-flag">🇫🇷</span><span>Français</span><i class="fa-solid fa-check lang-check"></i>
-</div>
-<div class="lang-dropdown-item" data-lang="ar-SA" data-label="AR">
-  <span class="lang-flag">🇸🇦</span><span>العربية</span><i class="fa-solid fa-check lang-check"></i>
-</div>
-<div class="lang-dropdown-item" data-lang="en-US" data-label="EN">
-  <span class="lang-flag">🇺🇸</span><span>English</span><i class="fa-solid fa-check lang-check"></i>
-</div>
-<div class="lang-dropdown-item" data-lang="es-ES" data-label="ES">
-  <span class="lang-flag">🇪🇸</span><span>Español</span><i class="fa-solid fa-check lang-check"></i>
-</div>
-<div class="lang-dropdown-item" data-lang="de-DE" data-label="DE">
-  <span class="lang-flag">🇩🇪</span><span>Deutsch</span><i class="fa-solid fa-check lang-check"></i>
-</div>
-<div class="lang-dropdown-item" data-lang="pt-BR" data-label="PT">
-  <span class="lang-flag">🇧🇷</span><span>Português</span><i class="fa-solid fa-check lang-check"></i>
-</div>
-<div class="lang-dropdown-item" data-lang="zh-CN" data-label="ZH">
-  <span class="lang-flag">🇨🇳</span><span>中文</span><i class="fa-solid fa-check lang-check"></i>
-</div>
-</div>
-</div>
+
 
 <div class="attach-popup" id="attachPopup">
 <div class="attach-popup-title">T&eacute;l&eacute;charger la pi&egrave;ce jointe</div>
@@ -3064,55 +2972,91 @@ function addSpeakButton(bubble, aiText) {
 }
 
 function detectLanguage(text) {
-  if (!text || text.length === 0) return { lang: 'en', langCode: 'en-US' };
-  
-  // 1. Scripts non-latins (détection instantanée)
-  if (/[\u0600-\u06FF]/.test(text)) return { lang: 'ar', langCode: 'ar-SA' };
-  if (/[\u0400-\u04FF]/.test(text)) return { lang: 'ru', langCode: 'ru-RU' };
-  if (/[\u4E00-\u9FFF]/.test(text)) return { lang: 'zh', langCode: 'zh-CN' };
-  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return { lang: 'ja', langCode: 'ja-JP' };
-  if (/[\uAC00-\uD7AF]/.test(text)) return { lang: 'ko', langCode: 'ko-KR' };
-  if (/[\u0370-\u03FF]/.test(text)) return { lang: 'el', langCode: 'el-GR' };
-  if (/[\u0590-\u05FF]/.test(text)) return { lang: 'he', langCode: 'he-IL' };
-  
-  // 2. Accents caractéristiques
-  if (/[àâäçéèêëîïôöùûüÿœ]/i.test(text)) return { lang: 'fr', langCode: 'fr-FR' };
-  if (/[ñáéíóúü¿¡]/i.test(text)) return { lang: 'es', langCode: 'es-ES' };
-  if (/[ãõáéíóúç]/i.test(text)) return { lang: 'pt', langCode: 'pt-BR' };
-  if (/[äöüß]/i.test(text)) return { lang: 'de', langCode: 'de-DE' };
-  
-  // 3. Mots-clés pour textes courts (amélioré avec greetings et mots courants)
-  var lowerText = text.toLowerCase();
-  
-  // Français: greetings + mots courants
-  var frCount = (lowerText.match(/\b(salut|bonjour|coucou|au revoir|au-revoir|merci|oui|non|svp|s'il|vous|tu|je|nous|ils|elles|une|des|est|sont|être|cette|celui|celle|mais|donc|aussi|très|bien|comment|pourquoi|quand|où|faire|pouvoir|devoir|vouloir|aller|venir|donner|prendre|mettre|aller|sans|avec)\b/g) || []).length;
-  
-  // English: greetings + common words
-  var enCount = (lowerText.match(/\b(hi|hello|hey|goodbye|bye|thanks|thank you|yes|no|please|sorry|sure|okay|ok|help|the|is|are|am|be|to|of|and|in|that|have|has|for|not|on|with|you|do|does|this|but|what|how|why|can|could|would|should|will|do|does|did|have|has|had)\b/g) || []).length;
-  
-  // Spanish: greetings + common words
-  var esCount = (lowerText.match(/\b(hola|adiós|adios|gracias|grazie|sí|si|no|por favor|disculpe|un momento|el|la|los|las|de|del|en|un|una|es|son|para|por|con|qué|cómo|por qué|puede|puedo|hay|haber|hacer|ir|venir|dar|tomar|poner|decir)\b/g) || []).length;
-  
-  // German: greetings + common words
-  var deCount = (lowerText.match(/\b(hallo|hi|guten tag|guten morgen|auf wiedersehen|danke|ja|nein|bitte|entschuldigung|der|die|das|den|dem|des|ein|eine|und|ist|sind|für|mit|kann|könnte|würde|soll|möchte|machen|gehen|kommen|geben|nehmen|sagen)\b/g) || []).length;
-  
-  // Retourner la langue avec le plus de correspondances
-  var scores = { fr: frCount, en: enCount, es: esCount, de: deCount };
-  var maxLang = Object.keys(scores).reduce((a, b) => scores[a] >= scores[b] ? a : b);
-  
-  // Si aucune correspondance trouvée, retourner null (pas de fallback)
-  if (scores[maxLang] === 0) {
-    return { lang: 'en', langCode: 'en-US' }; // Fallback à anglais
-  }
-  
-  var langCodeMap = {
+  if (!text || text.length === 0) return { lang: 'fr', langCode: 'fr-FR' };
+
+  // Carte complète code -> objet { lang, langCode }
+  var LANG_MAP = {
+    'ar': { lang: 'ar', langCode: 'ar-SA' },
+    'ru': { lang: 'ru', langCode: 'ru-RU' },
+    'uk': { lang: 'uk', langCode: 'uk-UA' },
+    'ja': { lang: 'ja', langCode: 'ja-JP' },
+    'zh': { lang: 'zh', langCode: 'zh-CN' },
+    'ko': { lang: 'ko', langCode: 'ko-KR' },
+    'el': { lang: 'el', langCode: 'el-GR' },
+    'he': { lang: 'he', langCode: 'he-IL' },
+    'hi': { lang: 'hi', langCode: 'hi-IN' },
+    'th': { lang: 'th', langCode: 'th-TH' },
+    'tr': { lang: 'tr', langCode: 'tr-TR' },
     'fr': { lang: 'fr', langCode: 'fr-FR' },
     'en': { lang: 'en', langCode: 'en-US' },
     'es': { lang: 'es', langCode: 'es-ES' },
-    'de': { lang: 'de', langCode: 'de-DE' }
+    'de': { lang: 'de', langCode: 'de-DE' },
+    'pt': { lang: 'pt', langCode: 'pt-BR' },
+    'it': { lang: 'it', langCode: 'it-IT' },
+    'nl': { lang: 'nl', langCode: 'nl-NL' },
+    'pl': { lang: 'pl', langCode: 'pl-PL' },
+    'sv': { lang: 'sv', langCode: 'sv-SE' },
+    'ro': { lang: 'ro', langCode: 'ro-RO' },
+    'vi': { lang: 'vi', langCode: 'vi-VN' },
+    'id': { lang: 'id', langCode: 'id-ID' }
   };
-  
-  return langCodeMap[maxLang] || { lang: 'en', langCode: 'en-US' };
+  function r(code) { return LANG_MAP[code] || LANG_MAP['fr']; }
+
+  // == 1. Scripts non-latins (detection instantanee et certaine) ==
+  if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text))
+    return r('ar');
+  if (/[\u0400-\u04FF]/.test(text))
+    return /[\u0457\u0454\u0490\u0491]/.test(text) ? r('uk') : r('ru');
+  if (/[\u3040-\u309F\u30A0-\u30FF]/.test(text)) return r('ja');
+  if (/[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/.test(text)) return r('zh');
+  if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/.test(text)) return r('ko');
+  if (/[\u0370-\u03FF\u1F00-\u1FFF]/.test(text)) return r('el');
+  if (/[\u0590-\u05FF\uFB1D-\uFB4F]/.test(text)) return r('he');
+  if (/[\u0900-\u097F]/.test(text)) return r('hi');
+  if (/[\u0E00-\u0E7F]/.test(text)) return r('th');
+
+  // == 2. Accents univoques (latins etendus) ==
+  if (/[\u011F\u015F\u0131\u0130\u011E\u015E]/.test(text)) return r('tr'); // g-breve, s-cedille, i-sans-point
+  if (/[ñ¿¡]/.test(text)) return r('es');          // 100% exclusif espagnol
+  if (/[ãõ]/.test(text)) return r('pt');            // 100% exclusif portugais
+  if (/[äöüß]/.test(text)) return r('de');          // 100% exclusif allemand
+  if (/[łźżąęćńś]/.test(text)) return r('pl');     // 100% exclusif polonais
+  if (/[șțȘȚăĂ]/.test(text)) return r('ro');        // 100% exclusif roumain (ă inclus)
+  if (/[åÅ]/.test(text)) return r('sv');             // scandinave
+  // Francais exclusif : accent grave/circonflex specifiques
+  if (/[àâçèêëîïôùûüÿœæ]/i.test(text)) return r('fr');
+  // Accent aigu ambigu (es/pt/it) -> resolu par mots-cles (etape 3)
+
+  // == 3. Mots-cles ponderes (textes sans accents distinctifs) ==
+  var t = text.toLowerCase();
+
+  var scores = {
+    fr: (t.match(/\b(je|tu|il|elle|nous|vous|ils|elles|un|une|des|les|le|la|est|sont|avec|pour|dans|sur|par|mais|donc|car|que|qui|salut|bonjour|bonsoir|coucou|merci|oui|non|svp|comment|pourquoi|quand|faire|avoir|aller|vouloir|pouvoir|devoir|venir|voir|sans|vers|sous|entre|depuis|avant|apres|mon|ma|mes|ton|ta|son|sa|nos|vos|leur|leurs|aussi|tres|bien|encore|deja|toujours|jamais|maintenant|ici|ca)\b/g) || []).length,
+
+    en: (t.match(/\b(i|you|he|she|we|they|the|is|are|was|were|been|being|have|has|had|do|does|did|will|would|could|should|may|might|shall|and|but|not|this|that|these|those|with|from|into|about|just|also|hi|hello|hey|thanks|thank|yes|no|please|sorry|okay|ok|sure|right|get|got|go|come|know|think|make|take|want|need|see|look|my|your|his|her|our|their|its|what|who|where|when|why|how|can|because|there|here|very|more|some|any|all|good|great|well)\b/g) || []).length,
+
+    es: (t.match(/\b(yo|nosotros|vosotros|ellos|ellas|los|las|del|al|con|para|por|pero|aunque|mientras|porque|entonces|hola|adios|gracias|bueno|claro|vale|pues|hacer|ir|venir|tener|estar|ser|poder|querer|deber|saber|hay|tiene|tienes|tienen|quiero|quieres|puedo|puedes|pueden|estoy|estas|estan)\b/g) || []).length,
+
+    de: (t.match(/\b(ich|du|er|wir|ihr|der|die|das|ein|eine|und|ist|sind|war|waren|mit|fur|auf|an|von|zu|bei|nach|uber|unter|vor|hallo|danke|ja|nein|bitte|wie|was|wo|wer|warum|wann|schon|noch|morgen|abend|guten|gut|tag|nacht|tschuss|entschuldigung|machen|gehen|kommen|haben|sein|werden|konnen|mussen|wollen|sagen|sehr|auch|hier|jetzt|dann|nur|mehr|alle)\b/g) || []).length,
+
+    pt: (t.match(/\b(eu|nos|eles|elas|do|da|dos|das|com|mas|pois|embora|ola|obrigado|obrigada|sim|nao|tudo|bem|voce|fazer|ir|vir|ter|estar|ser|poder|querer|dever|saber|ver|dar|dizer|tenho|tens|tem|temos|quero|queres|posso|podes|podem|estou|estao|isso|tambem|muito|mais|agora|entao|aqui|la|tb|blz|flw|vlw)\b/g) || []).length,
+
+    it: (t.match(/\b(io|lui|lei|noi|loro|il|gli|uno|del|della|degli|delle|con|per|su|di|che|ma|se|come|quando|perche|quindi|pero|anche|ciao|grazie|scusa|prego|si|no|bene|tutto|molto|fare|andare|venire|avere|essere|potere|volere|dovere|sapere|vedere|dare|ho|hai|ha|abbiamo|voglio|vuoi|sono|sei|siamo|cosa|chi|dove)\b/g) || []).length,
+
+    nl: (t.match(/\b(ik|jij|hij|zij|wij|jullie|de|het|een|zijn|was|waren|met|voor|op|aan|van|naar|bij|over|door|maar|ook|nog|al|hallo|dag|dank|ja|nee|goed|hoe|wat|wie|waar|waarom|maken|gaan|komen|hebben|worden|kunnen|moeten|willen|mijn|jouw|dit|dat|hier|nu|dan|meer|alle|heel)\b/g) || []).length,
+  };
+
+  var maxScore = 0;
+  var best = 'fr'; // defaut francais
+  for (var lang in scores) {
+    if (scores[lang] > maxScore) { maxScore = scores[lang]; best = lang; }
+    else if (scores[lang] === maxScore && maxScore > 0 && lang === 'fr') { best = 'fr'; }
+  }
+
+  if (maxScore > 0) return r(best);
+
+  // == 4. Fallback : francais (langue par defaut de Nafti AI) ==
+  return r('fr');
 }
 
 function speakText(text, button) {
@@ -3725,100 +3669,180 @@ window.shareConversation = function() {
 </html>
 
 <script>
-// === Reconnaissance vocale + sélecteur de langue ===
+// === Reconnaissance vocale — auto-détection de langue ===
 (function() {
 document.addEventListener('DOMContentLoaded', function() {
-  var voiceBtn = document.getElementById('voiceBtn');
-  var messageInput = document.getElementById('messageInput');
-  var langBtn = document.getElementById('langBtn');
-  var langBtnLabel = document.getElementById('langBtnLabel');
-  var langDropdown = document.getElementById('langDropdown');
-  var langBtnWrapper = document.getElementById('langBtnWrapper');
+  var voiceBtn      = document.getElementById('voiceBtn');
+  var messageInput  = document.getElementById('messageInput');
+  var langBadge     = document.getElementById('voiceLangBadge');
 
   if (!voiceBtn) return;
 
-  var recognition = null;
-  var isListening = false;
-  var currentLang = 'fr-FR';
-
-  // ── Language dropdown toggle ──────────────────────────
-  if (langBtn && langDropdown) {
-    langBtn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      langDropdown.classList.toggle('active');
-    });
-
-    // Select language
-    langDropdown.querySelectorAll('.lang-dropdown-item').forEach(function(item) {
-      item.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var lang  = item.getAttribute('data-lang');
-        var label = item.getAttribute('data-label');
-        currentLang = lang;
-        langBtnLabel.textContent = label;
-        if (recognition) recognition.lang = lang;
-        // Update checkmarks
-        langDropdown.querySelectorAll('.lang-dropdown-item').forEach(function(el) {
-          el.classList.remove('selected');
-        });
-        item.classList.add('selected');
-        langDropdown.classList.remove('active');
-      });
-    });
-
-    // Close when clicking outside
-    document.addEventListener('click', function(e) {
-      if (!langBtnWrapper.contains(e.target)) {
-        langDropdown.classList.remove('active');
-      }
-    });
-  }
-
-  // ── Speech recognition ───────────────────────────────
+  // ── Support check ─────────────────────────────────────
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     voiceBtn.style.display = 'none';
-    if (langBtn) langBtn.style.display = 'none';
     return;
   }
 
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  recognition = new SR();
-  recognition.continuous = false;
-  recognition.interimResults = false;
-  recognition.lang = currentLang;
+  // ── Langue par défaut : celle du navigateur, sinon fr-FR ─
+  var navLang = (navigator.language || 'fr-FR').toLowerCase();
+  var DEFAULT_LANG = navLang.startsWith('ar') ? 'ar-SA'
+                   : navLang.startsWith('en') ? 'en-US'
+                   : navLang.startsWith('es') ? 'es-ES'
+                   : navLang.startsWith('de') ? 'de-DE'
+                   : navLang.startsWith('pt') ? 'pt-BR'
+                   : navLang.startsWith('zh') ? 'zh-CN'
+                   : navLang.startsWith('ru') ? 'ru-RU'
+                   : 'fr-FR';
 
-  recognition.onstart = function() {
-    isListening = true;
-    voiceBtn.classList.add('listening');
-    voiceBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
-    voiceBtn.title = 'Arr\u00eater';
+  // ── Détection rapide de langue depuis texte partiel ───
+  var LANG_MAP = {
+    ar: 'ar-SA', ru: 'ru-RU', zh: 'zh-CN',
+    ja: 'ja-JP', ko: 'ko-KR', el: 'el-GR', he: 'he-IL',
+    fr: 'fr-FR', en: 'en-US', es: 'es-ES',
+    de: 'de-DE', pt: 'pt-BR'
+  };
+  var LANG_LABELS = {
+    'ar-SA': 'AR', 'ru-RU': 'RU', 'zh-CN': 'ZH',
+    'ja-JP': 'JA', 'ko-KR': 'KO', 'el-GR': 'EL', 'he-IL': 'HE',
+    'fr-FR': 'FR', 'en-US': 'EN', 'es-ES': 'ES',
+    'de-DE': 'DE', 'pt-BR': 'PT'
   };
 
-  recognition.onresult = function(event) {
-    var transcript = event.results[0][0].transcript;
-    messageInput.value += (messageInput.value ? ' ' : '') + transcript;
-    messageInput.dispatchEvent(new Event('input'));
-    messageInput.focus();
-  };
+  function detectLangCode(text) {
+    if (!text) return null;
+    // Scripts non-latins → détection immédiate
+    if (/[\u0600-\u06FF]/.test(text)) return 'ar-SA';
+    if (/[\u0400-\u04FF]/.test(text)) return 'ru-RU';
+    if (/[\u4E00-\u9FFF]/.test(text)) return 'zh-CN';
+    if (/[\u3040-\u30FF]/.test(text))  return 'ja-JP';
+    if (/[\uAC00-\uD7AF]/.test(text)) return 'ko-KR';
+    if (/[\u0370-\u03FF]/.test(text)) return 'el-GR';
+    if (/[\u0590-\u05FF]/.test(text)) return 'he-IL';
+    // Accents caractéristiques
+    if (/[àâäçéèêëîïôöùûüÿœ]/i.test(text)) return 'fr-FR';
+    if (/[ñ¿¡]/i.test(text))                return 'es-ES';
+    if (/[ãõ]/i.test(text))                 return 'pt-BR';
+    if (/[äöüß]/i.test(text))               return 'de-DE';
+    // Score de mots-clés sur texte court
+    var t = text.toLowerCase();
+    var scores = {
+      'fr-FR': (t.match(/\b(je|tu|nous|vous|ils|elles|le|la|les|de|du|un|une|des|est|sont|mais|donc|aussi|comment|pourquoi|bonjour|merci|oui|non|avec|pour|sur|dans|par|au|aux)\b/g)||[]).length,
+      'en-US': (t.match(/\b(the|is|are|am|it|he|she|we|they|you|i|a|an|of|in|to|and|that|have|for|not|on|with|do|does|what|how|hi|hello|yes|no|please|thanks)\b/g)||[]).length,
+      'es-ES': (t.match(/\b(yo|tú|el|la|los|las|de|en|un|una|es|son|para|por|con|que|hola|gracias|sí|no|cómo|qué|muy|bien)\b/g)||[]).length,
+      'de-DE': (t.match(/\b(ich|du|er|sie|wir|ihr|der|die|das|ein|eine|und|ist|sind|für|mit|nicht|wie|was|ja|nein|hallo|danke)\b/g)||[]).length,
+      'pt-BR': (t.match(/\b(eu|tu|ele|ela|nós|vocês|o|a|os|as|de|em|um|uma|é|são|para|por|com|que|olá|obrigado|sim|não|como)\b/g)||[]).length
+    };
+    var best = Object.keys(scores).reduce(function(a, b) { return scores[a] >= scores[b] ? a : b; });
+    return scores[best] > 0 ? best : null;
+  }
 
-  recognition.onerror = function() { stopListening(); };
-  recognition.onend   = function() { stopListening(); };
+  // ── État ──────────────────────────────────────────────
+  var isListening     = false;
+  var detectedLang    = DEFAULT_LANG;  // langue confirmée par interim
+  var pendingTranscript = '';          // texte accumulé (finals)
+  var restartPending  = false;         // redémarrage en cours
+  var recognition     = null;
 
-  function stopListening() {
-    if (!isListening) return;
-    isListening = false;
+  function buildRecognition(lang) {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var r  = new SR();
+    r.continuous      = true;
+    r.interimResults  = true;
+    r.maxAlternatives = 1;
+    r.lang            = lang;
+    return r;
+  }
+
+  function updateBadge(langCode) {
+    if (langBadge) langBadge.textContent = LANG_LABELS[langCode] || langCode.split('-')[0].toUpperCase();
+  }
+
+  function attachHandlers(r) {
+    r.onstart = function() {
+      isListening = true;
+      restartPending = false;
+      voiceBtn.classList.add('listening');
+      voiceBtn.innerHTML = '<i class="fa-solid fa-stop"></i><span class="voice-lang-badge" id="voiceLangBadge">' + (LANG_LABELS[detectedLang] || 'AUTO') + '</span>';
+      voiceBtn.title = 'Arrêter';
+      langBadge = document.getElementById('voiceLangBadge');
+    };
+
+    r.onresult = function(event) {
+      var interimText = '';
+      for (var i = event.resultIndex; i < event.results.length; i++) {
+        var result = event.results[i];
+        if (result.isFinal) {
+          pendingTranscript += result[0].transcript + ' ';
+          // Écriture immédiate dans le champ
+          var current = messageInput.value;
+          messageInput.value = current + (current && !current.endsWith(' ') ? ' ' : '') + result[0].transcript;
+          messageInput.dispatchEvent(new Event('input'));
+        } else {
+          interimText += result[0].transcript;
+        }
+      }
+
+      // Auto-détection sur texte interim (dès qu'on a ≥3 caractères)
+      var sample = (interimText || pendingTranscript || '').trim();
+      if (sample.length >= 3) {
+        var detected = detectLangCode(sample);
+        if (detected && detected !== detectedLang) {
+          detectedLang = detected;
+          updateBadge(detectedLang);
+          // Redémarrer avec la bonne langue (si pas déjà en cours)
+          if (!restartPending) {
+            restartPending = true;
+            try { r.stop(); } catch(e) {}
+          }
+        }
+      }
+    };
+
+    r.onerror = function(e) {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      stopListening(true);
+    };
+
+    r.onend = function() {
+      if (restartPending && isListening) {
+        // Redémarrer avec la langue détectée
+        recognition = buildRecognition(detectedLang);
+        attachHandlers(recognition);
+        try { recognition.start(); } catch(e) { stopListening(true); }
+      } else {
+        stopListening(false);
+      }
+    };
+  }
+
+  function startListening() {
+    if (isListening) return;
+    pendingTranscript = '';
+    detectedLang = DEFAULT_LANG;
+    recognition = buildRecognition(detectedLang);
+    attachHandlers(recognition);
+    try {
+      recognition.start();
+    } catch(e) {
+      console.warn('[Voice] start error:', e);
+    }
+  }
+
+  function stopListening(force) {
+    if (!isListening && !force) return;
+    isListening     = false;
+    restartPending  = false;
     voiceBtn.classList.remove('listening');
     voiceBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
-    voiceBtn.title = 'Reconnaissance vocale';
-    try { recognition.stop(); } catch(e) {}
+    voiceBtn.title = 'Reconnaissance vocale (auto-détection)';
+    try { if (recognition) recognition.stop(); } catch(e) {}
+    messageInput.focus();
   }
 
   voiceBtn.addEventListener('click', function() {
-    // Also close the lang dropdown if open
-    if (langDropdown) langDropdown.classList.remove('active');
-    recognition.lang = currentLang;
-    if (isListening) { stopListening(); }
-    else { try { recognition.start(); } catch(e) {} }
+    if (isListening) { restartPending = false; stopListening(true); }
+    else { startListening(); }
   });
 });
 })();

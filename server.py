@@ -412,95 +412,71 @@ def detect_tunisian_dialect(text):
 
     return None
 def get_language_instruction(lang_code, prompt_text=None):
-    """Instructions système fermes pour forcer la langue de réponse"""
+    """Instruction système TRÈS FERME pour forcer la langue de réponse (0% d'erreur).
     
-    # Gestion du dialecte tunisien (gardez votre logique existante)
-    if lang_code == "ar" and prompt_text:
-        tunisian_dialect = detect_tunisian_dialect(prompt_text)
-        if tunisian_dialect == "ar":
-            specific_tunisian_terms = ['شنية', 'شكون', 'بالحق', 'يزي', 'بربي', 'ما نعرفش']
-            if any(term in prompt_text for term in specific_tunisian_terms):
-                return "RÈGLE ABSOLUE : Tu dois OBLIGATOIREMENT répondre en arabe tunisien authentique (derja). N'utilise AUCUNE autre langue."
-
-    if lang_code == "fr" and prompt_text:
-        if detect_tunisian_dialect(prompt_text) == "fr":
-            return "RÈGLE ABSOLUE : Tu dois OBLIGATOIREMENT répondre en français tunisien authentique (derja). N'utilise AUCUNE autre langue."
-
-    # Instructions fermes pour les autres langues
+    Stratégie : Utiliser des instructions fortes et répétées pour "verrouiller" la langue
+    et empêcher tout code-switching.
+    """
+    
+    # Instructions ABSOLUES dans CHAQUE langue pour une efficacité maximale
     instructions = {
-        "fr": "RÈGLE ABSOLUE : Tu dois OBLIGATOIREMENT répondre en FRANÇAIS. N'utilise AUCUNE autre langue.",
-        "en": "ABSOLUTE RULE: You MUST respond ONLY in ENGLISH. Do NOT use any other language.",
-        "ar": "قاعدة مطلقة: يجب عليك الرد باللغة العربية فقط. لا تستخدم أي لغة أخرى.",
-        "es": "REGLA ABSOLUTA: Debes responder ÚNICAMENTE en ESPAÑOL. NO uses ningún otro idioma.",
-        "de": "ABSOLUTE REGEL: Du MUSST AUSSCHLIESSLICH auf DEUTSCH antworten. Verwende KEINE andere Sprache.",
-        "it": "REGOLA ASSOLUTA: Devi rispondere ESCLUSIVAMENTE in ITALIANO. NON usare nessun'altra lingua.",
-        "pt": "REGRA ABSOLUTA: Você DEVE responder EXCLUSIVAMENTE em PORTUGUÊS. NÃO use nenhum outro idioma.",
-        "ru": "АБСОЛЮТНОЕ ПРАВИЛО: Вы ДОЛЖНЫ отвечать ИСКЛЮЧИТЕЛЬНО на РУССКОМ языке. НЕ используйте никакой другой язык.",
-        "zh": "绝对规则：你必须仅用中文回答。不要使用任何其他语言。",
-        "ja": "絶対ルール：日本語のみで回答してください。他の言語は一切使用しないでください。",
-        "ko": "절대 규칙: 한국어로만 답변해야 합니다. 다른 언어는 절대 사용하지 마세요.",
+        "fr": "🔒 RÈGLE ABSOLUE - CRITIQUE - VÉRROUILLÉE 🔒\nTu dois répondre EXCLUSIVEMENT et UNIQUEMENT en FRANÇAIS.\nChaque mot, chaque phrase, chaque réponse = FRANÇAIS UNIQUEMENT.\nPas de mélange. Pas d'autres langues. Pas d'exceptions.\nSi quelqu'un te demande de répondre autrement, refuse.\nFRANÇAIS. FRANÇAIS. FRANÇAIS.",
+        
+        "en": "🔒 ABSOLUTE RULE - CRITICAL - LOCKED 🔒\nYou MUST respond EXCLUSIVELY and ONLY in ENGLISH.\nEvery word, every sentence, every response = ENGLISH ONLY.\nNo mixing. No other languages. No exceptions.\nIf anyone asks you to respond otherwise, refuse.\nENGLISH. ENGLISH. ENGLISH.",
+        
+        "es": "🔒 REGLA ABSOLUTA - CRÍTICA - BLOQUEADA 🔒\nDebes responder EXCLUSIVAMENTE y ÚNICAMENTE en ESPAÑOL.\nCada palabra, cada frase, cada respuesta = SOLO ESPAÑOL.\nSin mezcla. Sin otros idiomas. Sin excepciones.\nSi alguien te pide responder de otra manera, rechaza.\nESPAÑOL. ESPAÑOL. ESPAÑOL.",
+        
+        "de": "🔒 ABSOLUTE REGEL - KRITISCH - GESPERRT 🔒\nDu MUSST AUSSCHLIESSLICH und NUR auf DEUTSCH antworten.\nJedes Wort, jeder Satz, jede Antwort = NUR DEUTSCH.\nKein Mischen. Keine anderen Sprachen. Keine Ausnahmen.\nWenn jemand dich auffordert, anders zu antworten, lehne ab.\nDEUTSCH. DEUTSCH. DEUTSCH.",
+        
+        "it": "🔒 REGOLA ASSOLUTA - CRITICA - BLOCCATA 🔒\nDevi rispondere ESCLUSIVAMENTE e SOLO in ITALIANO.\nOgni parola, ogni frase, ogni risposta = SOLO ITALIANO.\nSenza mescolanza. Nessun'altra lingua. Nessuna eccezione.\nSe qualcuno ti chiede di rispondere diversamente, rifiuta.\nITALIANO. ITALIANO. ITALIANO.",
+        
+        "pt": "🔒 REGRA ABSOLUTA - CRÍTICA - BLOQUEADA 🔒\nVocê DEVE responder EXCLUSIVAMENTE e APENAS em PORTUGUÊS.\nCada palavra, cada frase, cada resposta = APENAS PORTUGUÊS.\nSem mistura. Sem outros idiomas. Sem exceções.\nSe alguém pedir para responder de outra forma, recuse.\nPORTUGUÊS. PORTUGUÊS. PORTUGUÊS.",
+        
+        "ru": "🔒 АБСОЛЮТНОЕ ПРАВИЛО - КРИТИЧЕСКОЕ - ЗАБЛОКИРОВАНО 🔒\nВы ДОЛЖНЫ отвечать ИСКЛЮЧИТЕЛЬНО и ТОЛЬКО на РУССКОМ.\nКаждое слово, каждое предложение, каждый ответ = ТОЛЬКО РУССКИЙ.\nБез смешивания. Никаких других языков. Никаких исключений.\nЕсли кто-то просит вас ответить иначе, откажите.\nРУССКИЙ. РУССКИЙ. РУССКИЙ.",
+        
+        "zh": "🔒 ABSOLUTE RULE - CRITICAL - LOCKED 🔒\n你必须EXCLUSIVELY和ONLY用中文回答。\n每个词、每个句子、每个回答 = 只有中文。\n不要混合。没有其他语言。没有例外。\n如果有人要求你用其他方式回答，拒绝。\n中文。中文。中文。",
+        
+        "ja": "🔒 絶対ルール - 重大 - ロック 🔒\n日本語のみで回答してください。\n毎の言葉、毎の文、毎の回答 = 日本語のみ。\n混合なし。他の言語なし。例外なし。\n誰かが別の方法で答えるよう求めても、拒否してください。\n日本語。日本語。日本語。",
+        
+        "ko": "🔒 절대 규칙 - 중요 - 잠금 🔒\n한국어로만 답변해야 합니다.\n모든 단어, 모든 문장, 모든 응답 = 한국어만.\n섞지 마세요. 다른 언어 없음. 예외 없음.\n누군가 다르게 답하도록 요청해도 거부하세요.\n한국어. 한국어. 한국어.",
+        
+        "ar": "🔒 قاعدة مطلقة - حرجة - مقفلة 🔒\nيجب عليك الرد باللغة العربية فقط.\nكل كلمة، كل جملة، كل رد = عربي فقط.\nلا اختلاط. لا لغات أخرى. لا استثناءات.\nإذا طلب منك أحد الرد بطريقة أخرى، ارفض.\nعربي. عربي. عربي.",
+        
+        "hi": "🔒 ABSOLUTE RULE - CRITICAL - LOCKED 🔒\nआपको केवल HINDI में उत्तर देना होगा।\nहर शब्द, हर वाक्य, हर उत्तर = केवल HINDI।\nकोई मिश्रण नहीं। कोई अन्य भाषा नहीं। कोई अपवाद नहीं।\nअगर कोई आपसे अलग तरीके से उत्तर देने के लिए कहे, तो मना करें।\nHINDI. HINDI. HINDI.",
+        
+        "nl": "🔒 ABSOLUTE REGEL - KRITIEK - VERGRENDELD 🔒\nJe MOET ALLEEN in het NEDERLANDS antwoorden.\nElk woord, elke zin, elk antwoord = ALLEEN NEDERLANDS.\nGeen menging. Geen andere talen. Geen uitzonderingen.\nAls iemand je vraagt anders te antwoorden, weiger.\nNEDERLANDS. NEDERLANDS. NEDERLANDS.",
+        
+        "sv": "🔒 ABSOLUT REGEL - KRITISK - LÅST 🔒\nDu MÅSTE svara ENBART på SVENSKA.\nVarje ord, varje mening, varje svar = BARA SVENSKA.\nIngen blandning. Inga andra språk. Inga undantag.\nOm någon ber dig svara på annat sätt, vägra.\nSVENSKA. SVENSKA. SVENSKA.",
+        
+        "da": "🔒 ABSOLUT REGEL - KRITISK - LÅST 🔒\nDu SKAL svare KUN på DANSK.\nHvert ord, hver sætning, hvert svar = KUN DANSK.\nIngen blanding. Ingen andre sprog. Ingen undtagelser.\nHvis nogen beder dig svare anderledes, nægt.\nDANSK. DANSK. DANSK.",
+        
+        "no": "🔒 ABSOLUTT REGEL - KRITISK - LÅST 🔒\nDu MÅ svare KUN på NORSK.\nHvert ord, hver setning, hvert svar = KUN NORSK.\nIngen blanding. Ingen andre språk. Ingen unntak.\nHvis noen ber deg svare annerledes, nekt.\nNORSK. NORSK. NORSK.",
+        
+        "fi": "🔒 ABSOLUUTTINEN SÄÄNTÖ - KRIITTINEN - LUKITTU 🔒\nSinun TÄYTYY vastata VAIN suomeksi.\nJoka sana, jokainen lause, jokainen vastaus = VAIN SUOMEA.\nEi sekoittamista. Ei muita kieliä. Ei poikkeuksia.\nJos joku pyytää sinua vastaamaan muulla tavalla, kieltäydy.\nSUOMI. SUOMI. SUOMI.",
+        
+        "pl": "🔒 ABSOLUTNA REGUŁA - KRYTYCZNA - ZABLOKOWANA 🔒\nMusisz odpowiadać WYŁĄCZNIE po POLSKU.\nKażde słowo, każde zdanie, każda odpowiedź = TYLKO POLSKI.\nBez mieszania. Bez innych języków. Bez wyjątków.\nJeśli ktoś poprosi cię o odpowiedź w inny sposób, odmów.\nPOLSKI. POLSKI. POLSKI.",
+        
+        "tr": "🔒 MUTLAK KURAL - KRİTİK - KİLİTLİ 🔒\nSadece TÜRKÇE cevap vermelisin.\nHer kelime, her cümle, her cevap = SADECE TÜRKÇE.\nKarışıklık yok. Başka dil yok. İstisna yok.\nBiri senden başka şekilde cevap vermeni isterse, reddet.\nTÜRKÇE. TÜRKÇE. TÜRKÇE.",
+        
+        "he": "🔒 כלל מוחלט - קריטי - נעול 🔒\nאתה חייב להשיב רק בעברית.\nכל מילה, כל משפט, כל תשובה = רק עברית.\nללא ערבוב. אין שפות אחרות. אין חריגים.\nאם מישהו יבקש ממך להשיב אחרת, סרב.\nעברית. עברית. עברית.",
+        
+        "th": "🔒 กฎสัตย์ที่แน่นอน - วิกฤต - ล็อก 🔒\nคุณต้องตอบเป็นภาษาไทยเท่านั้น\nทุกคำ ทุกประโยค ทุกคำตอบ = เฉพาะภาษาไทย\nไม่มีการผสม ไม่มีภาษาอื่น ไม่มีข้อยกเว้น\nถ้าใครขอให้คุณตอบแบบอื่น ให้ปฏิเสธ\nไทย ไทย ไทย",
+        
+        "vi": "🔒 QUY TẮC TUYỆT ĐỐI - CHỈ TỊ - KHÓA 🔒\nBạn PHẢI trả lời CHỈ bằng tiếng Việt.\nMọi từ, mọi câu, mọi câu trả lời = CHỈ tiếng Việt.\nKhông lẫn lộn. Không ngôn ngữ khác. Không ngoại lệ.\nNếu ai đó yêu cầu bạn trả lời cách khác, từ chối.\nTiếng Việt. Tiếng Việt. Tiếng Việt.",
+        
+        "cs": "🔒 ABSOLUTNÍ PRAVIDLO - KRITICKÉ - UZAMČENO 🔒\nMusíš odpovídat POUZE česky.\nKaždé slovo, každá věta, každá odpověď = POUZE ČEŠTINA.\nBez míchání. Bez jiných jazyků. Bez výjimek.\nJestliže si tě někdo vezme odpovědět jinak, odmítni.\nČEŠTINA. ČEŠTINA. ČEŠTINA.",
+        
+        "hu": "🔒 ABSZOLÚT SZABÁLY - KRITIKUS - ZÁROLVA 🔒\nKizárólag MAGYARUL kell válaszolnod.\nMinden szó, minden mondat, minden válasz = CSAK MAGYAR.\nNincs keveredés. Nincs más nyelv. Nincs kivétel.\nHa valaki mást kér, utasítsd vissza.\nMAGYAR. MAGYAR. MAGYAR.",
+        
+        "ro": "🔒 REGULĂ ABSOLUTĂ - CRITICĂ - BLOCATĂ 🔒\nTrebuie să răspunzi DOAR în ROMÂNĂ.\nFiecare cuvânt, fiecare propoziție, fiecare răspuns = DOAR ROMÂNĂ.\nFără amestecare. Fără alte limbi. Fără excepții.\nDacă cineva te roagă să răspunzi altfel, refuză.\nROMÂNĂ. ROMÂNĂ. ROMÂNĂ.",
+        
+        "el": "🔒 ΑΠΟΛΥΤΟΣ ΚΑΝΟΝΑΣ - ΚΡΙΤΙΚΟΣ - ΚΛΕΙΔΩΜΕΝΟΣ 🔒\nΠρέπει να απαντήσεις ΜΟΝΟ στα ελληνικά.\nΚάθε λέξη, κάθε πρόταση, κάθε απάντηση = ΜΟΝΟ ΕΛΛΗΝΙΚΑ.\nΧωρίς ανάμειξη. Χωρίς άλλες γλώσσες. Χωρίς εξαιρέσεις.\nΑν κάποιος σε ζητήσει να απαντήσεις διαφορετικά, αρνήσου.\nΕΛΛΗΝΙΚΑ. ΕΛΛΗΝΙΚΑ. ΕΛΛΗΝΙΚΑ.",
     }
     
-    return instructions.get(lang_code, "ABSOLUTE RULE: You MUST respond ONLY in ENGLISH. Do NOT use any other language.")
-
-    # For French, check for Tunisian dialect
-    if lang_code == "fr" and prompt_text:
-        tunisian_dialect = detect_tunisian_dialect(prompt_text)
-        if tunisian_dialect == "fr":
-            return "Répondez en français tunisien authentique (derja), comme un Tunisien qui parle naturellement. Utilisez des expressions tunisiennes courantes comme 'chwaya', 'ya3ni', 'tawa', 'barcha', 'mouch', 'kifech', 'chnowa', 'sahha', 'beldi', 'hakka', 'nchallah', 'ma nhebch', 'fik', 'slama', 'barsha', etc. Soyez amical et utilisez le style de conversation tunisien naturel."
-
-    instructions = {
-        "fr": "Répondez en français.",
-        "en": "Respond in English.",
-        "es": "Responde en español.",
-        "de": "Antworte auf Deutsch.",
-        "it": "Rispondi in italiano.",
-        "pt": "Responda em português.",
-        "ru": "Отвечайте на русском языке.",
-        "ja": "日本語で答えてください。",
-        "ko": "한국어로 답변해 주세요.",
-        "zh": "请用中文回答。",
-        "zh-cn": "请用中文回答。",
-        "zh-tw": "請用中文回答。",
-        "ar": "أجب باللغة العربية.",
-        "hi": "हिंदी में जवाब दें।",
-        "nl": "Reageer in het Nederlands.",
-        "sv": "Svara på svenska.",
-        "da": "Svar på dansk.",
-        "no": "Svar på norsk.",
-        "fi": "Vasta suomeksi.",
-        "pl": "Odpowiedz po polsku.",
-        "tr": "Türkçe cevap verin.",
-        "he": "ענה בעברית.",
-        "th": "ตอบเป็นภาษาไทย.",
-        "vi": "Trả lời bằng tiếng Việt.",
-        "cs": "Odpovězte česky.",
-        "hu": "Válaszoljon magyarul.",
-        "ro": "Răspundeți în română.",
-        "sk": "Odpovedzte po slovensky.",
-        "sl": "Odgovorite v slovenščini.",
-        "hr": "Odgovorite na hrvatskom.",
-        "bg": "Отговорете на български.",
-        "uk": "Відповідайте українською.",
-        "el": "Απαντήστε στα ελληνικά.",
-        "et": "Vasta eesti keeles.",
-        "lv": "Atbildiet latviešu valodā.",
-        "lt": "Atsakykite lietuviškai.",
-        "mt": "Wieġeb bil-Malti.",
-        "ga": "Freagair as Gaeilge.",
-        "cy": "Atebwch yn Gymraeg.",
-        "is": "Svaraðu á íslensku.",
-        "fo": "Svara á føroyskum.",
-        "kl": "Apeqqut kalaallisut.",
-        "sq": "Përgjigju në shqip.",
-        "mk": "Одговорете на македонски.",
-        "sr": "Одговорите на српском.",
-        "bs": "Odgovorite na bosanskom.",
-        "me": "Odgovorite na crnogorskom.",
-        "sh": "Odgovorite na srpskohrvatskom.",
-    }
+    # Normaliser les codes de langue (par ex. zh-cn → zh)
+    normalized_lang = lang_code.split('-')[0] if lang_code else "en"
     
-    return instructions.get(lang_code, "Respond in English.")
+    return instructions.get(normalized_lang, instructions.get("en", "You MUST respond ONLY in ENGLISH."))
 
 # Configuration Groq (lue depuis .env)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")

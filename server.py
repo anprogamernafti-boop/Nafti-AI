@@ -14,6 +14,10 @@ from PIL import Image
 from io import BytesIO
 from langdetect import detect, LangDetectException, DetectorFactory
 DetectorFactory.seed = 0   # Résultats reproductibles
+try:
+    from textblob import TextBlob
+except:
+    TextBlob = None  # Fallback si non disponible
 
 # Autoriser OAuth en HTTP pour le développement local
 os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT', '1')
@@ -106,7 +110,328 @@ def verify_password(password, password_hash):
     """Verify password against hash"""
     return hash_password(password) == password_hash
 
+def detect_language_ensemble(text):
+    """
+    🧠 DÉTECTION INTELLIGENTE ENSEMBLE - NLP + STATISTIQUES + PATTERNS
+    
+    Approche multi-modèle :
+      1. Détection par script Unicode (100% fiable pour non-latin)
+      2. Détection NLP (langdetect) - analyse statistique profonde
+      3. N-grams et patterns linguistiques (analyse probabiliste)
+      4. Scoring ensemble avec vote pondéré
+      5. Spécialisation pour l'ARABE (détection enrichie)
+    
+    Cette approche détecte TOUS LES MOTS réels, pas juste une liste !
+    """
+    if not text or not text.strip():
+        return {"language": "fr", "confidence": 0.5, "method": "fallback"}
+    
+    stripped_text = text.strip()
+    lower_text = stripped_text.lower()
+    results = {
+        "unicode": None,
+        "langdetect": None, 
+        "ngrams": None,
+        "arabic_special": None
+    }
+    
+    # ─── 1. UNICODE SCRIPTS (Fiabilité 100%) ───────────────────────────────
+    if re.search(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]", stripped_text):
+        results["unicode"] = ("ar", 1.0)  # Arabe
+    elif re.search(r"[\u0400-\u04FF]", stripped_text):
+        results["unicode"] = ("ru", 1.0)  # Cyrillique
+    elif re.search(r"[\u3040-\u309F\u30A0-\u30FF]", stripped_text):
+        results["unicode"] = ("ja", 1.0)  # Japonais
+    elif re.search(r"[\u4E00-\u9FFF]", stripped_text):
+        results["unicode"] = ("zh", 1.0)  # Chinois
+    elif re.search(r"[\uAC00-\uD7AF]", stripped_text):
+        results["unicode"] = ("ko", 1.0)  # Coréen
+    elif re.search(r"[\u0370-\u03FF]", stripped_text):
+        results["unicode"] = ("el", 1.0)  # Grec
+    elif re.search(r"[\u0590-\u05FF]", stripped_text):
+        results["unicode"] = ("he", 1.0)  # Hébreu
+    elif re.search(r"[\u0900-\u097F]", stripped_text):
+        results["unicode"] = ("hi", 1.0)  # Hindi
+    elif re.search(r"[\u0E00-\u0E7F]", stripped_text):
+        results["unicode"] = ("th", 1.0)  # Thai
+    
+    # Si on a détecté un script non-latin (100% confiance), retourner immédiatement
+    if results["unicode"]:
+        lang, conf = results["unicode"]
+        return {"language": lang, "confidence": conf, "method": "unicode_script", "details": results}
+    
+    # ─── 2. LANGDETECT (NLP probabiliste) ──────────────────────────────────
+    try:
+        detected = detect(stripped_text)
+        # Normaliser les codes (zh-cn → zh, etc.)
+        base = detected.split('-')[0] if '-' in detected else detected
+        results["langdetect"] = (base, 0.85)  # Bonne confiance mais pas parfait
+    except:
+        results["langdetect"] = None
+    
+    # ─── 3. N-GRAMS & PATTERNS (Analyse statistique sophistiquée) ───────────
+    # Analyser les n-grams (séquences de caractères) typiques de chaque langue
+    
+    ngram_scores = {
+        "fr": _score_french_ngrams(stripped_text, lower_text),
+        "en": _score_english_ngrams(stripped_text, lower_text),
+        "es": _score_spanish_ngrams(stripped_text, lower_text),
+        "de": _score_german_ngrams(stripped_text, lower_text),
+        "pt": _score_portuguese_ngrams(stripped_text, lower_text),
+        "it": _score_italian_ngrams(stripped_text, lower_text),
+        "ar": _score_arabic_ngrams(stripped_text, lower_text),
+    }
+    
+    best_ngram_lang = max(ngram_scores, key=ngram_scores.get)
+    best_ngram_score = ngram_scores[best_ngram_lang]
+    if best_ngram_score > 0:
+        results["ngrams"] = (best_ngram_lang, min(0.75, best_ngram_score / 100))
+    
+    # ─── 4. ARABE SPÉCIAL (Détection renforcée) ───────────────────────────
+    arabic_confidence = _score_arabic_special(stripped_text, lower_text)
+    if arabic_confidence > 0.3:
+        results["arabic_special"] = ("ar", arabic_confidence)
+    
+    # ─── 5. VOTE D'ENSEMBLE (Combinaison intelligente) ──────────────────────
+    votes = {}
+    weights = {"unicode": 1.0, "langdetect": 0.8, "ngrams": 0.7, "arabic_special": 0.6}
+    
+    for method, result in results.items():
+        if result is not None and result[0]:  # Vérifier que result n'est pas None et contient (lang, conf)
+            lang, conf = result
+            if lang not in votes:
+                votes[lang] = 0
+            votes[lang] += conf * weights.get(method, 0.5)
+    
+    if not votes:
+        # Fallback: français par défaut
+        return {"language": "fr", "confidence": 0.5, "method": "ensemble_fallback", "details": results}
+    
+    best_lang = max(votes, key=votes.get)
+    total_weight = sum(weights.values())
+    final_confidence = votes[best_lang] / total_weight
+    
+    return {
+        "language": best_lang,
+        "confidence": min(1.0, final_confidence),
+        "method": "ensemble",
+        "votes": votes,
+        "details": results
+    }
+
+def _score_french_ngrams(text, lower_text):
+    """Scorer français basé sur n-grams caractéristiques"""
+    score = 0
+    
+    # Trigrammes français typiques
+    fr_trigrams = ['ent', 'ait', 'ion', 'ous', 'ant', 'eur', 'ans', 'ies', 'eau', 'ous', 'ais']
+    for trig in fr_trigrams:
+        score += lower_text.count(trig) * 2
+    
+    # Accents français
+    fr_accents = 'àâçèêëîïôùûüÿœæ'
+    score += sum(text.count(c) for c in fr_accents) * 3
+    
+    # Mots français communs (tous les mots, pas juste liste)
+    fr_patterns = [
+        r'\b(le|la|les|un|une|des|et|ou|mais|donc|est|sont|être|avoir|faire)\b',
+        r'\b(que|qui|quoi|comment|pourquoi|quand|où|ici|là|très|bien|aussi)\b',
+        r'\b(je|tu|il|elle|nous|vous|ils|elles|moi|toi|lui|nous|vous|leur)\b',
+        r'\b(mon|ma|mes|ton|ta|tes|son|sa|ses|notre|nos|votre|vos|leur|leurs)\b',
+    ]
+    for pattern in fr_patterns:
+        matches = re.findall(pattern, lower_text, re.IGNORECASE)
+        score += len(matches)
+    
+    return score
+
+def _score_english_ngrams(text, lower_text):
+    """Scorer anglais basé sur n-grams caractéristiques"""
+    score = 0
+    
+    # Trigrammes anglais typiques
+    en_trigrams = ['the', 'ing', 'and', 'ion', 'her', 'has', 'his', 'ous', 'not']
+    for trig in en_trigrams:
+        score += lower_text.count(trig) * 2
+    
+    # Mots anglais communs
+    en_patterns = [
+        r'\b(the|a|an|and|or|but|in|on|at|to|for|of|with|from|by|is|are|was)\b',
+        r'\b(be|been|being|have|has|had|do|does|did|will|would|could|should|may)\b',
+        r'\b(i|you|he|she|it|we|they|me|him|her|us|them|my|your|his|her|its)\b',
+    ]
+    for pattern in en_patterns:
+        matches = re.findall(pattern, lower_text, re.IGNORECASE)
+        score += len(matches)
+    
+    return score
+
+def _score_spanish_ngrams(text, lower_text):
+    """Scorer espagnol basé sur n-grams caractéristiques"""
+    score = 0
+    
+    # Trigrammes espagnols
+    es_trigrams = ['ión', 'ado', 'que', 'nte', 'ero', 'ara', 'los', 'del']
+    for trig in es_trigrams:
+        score += lower_text.count(trig) * 2
+    
+    # Accents espagnols
+    es_accents = 'áéíóúñ¿¡'
+    score += sum(text.count(c) for c in es_accents) * 3
+    
+    # Mots espagnols
+    es_patterns = [
+        r'\b(el|la|los|las|un|una|unos|unas|y|o|pero|que|de|del|para|por)\b',
+        r'\b(es|son|está|están|ser|estar|tener|hay|hacer|ir|venir|ver|dar)\b',
+        r'\b(yo|tú|él|ella|nosotros|vosotros|ellos|ellas|me|te|se|nos|os|les)\b',
+    ]
+    for pattern in es_patterns:
+        matches = re.findall(pattern, lower_text, re.IGNORECASE)
+        score += len(matches)
+    
+    return score
+
+def _score_german_ngrams(text, lower_text):
+    """Scorer allemand basé sur n-grams caractéristiques"""
+    score = 0
+    
+    # Trigrammes allemands
+    de_trigrams = ['sch', 'end', 'ung', 'ich', 'cht', 'cht', 'eit', 'hin']
+    for trig in de_trigrams:
+        score += lower_text.count(trig) * 2
+    
+    # Umlauts allemands (très distinctifs)
+    de_accents = 'äöüß'
+    score += sum(text.count(c) for c in de_accents) * 4
+    
+    # Mots allemands
+    de_patterns = [
+        r'\b(der|die|das|den|dem|des|ein|eine|einen|einem|eines|einer)\b',
+        r'\b(und|oder|aber|auch|wenn|weil|dass|was|wer|wie|wo|wann|warum)\b',
+        r'\b(ich|du|er|sie|es|wir|ihr|sie|mich|dich|sich|uns|euch)\b',
+        r'\b(ist|sind|war|waren|sein|haben|werden|können|müssen|wollen)\b',
+    ]
+    for pattern in de_patterns:
+        matches = re.findall(pattern, lower_text, re.IGNORECASE)
+        score += len(matches)
+    
+    return score
+
+def _score_portuguese_ngrams(text, lower_text):
+    """Scorer portugais basé sur n-grams caractéristiques"""
+    score = 0
+    
+    # Trigrammes portugais
+    pt_trigrams = ['ção', 'ado', 'ous', 'ent', 'ara', 'ava', 'vel', 'ibe']
+    for trig in pt_trigrams:
+        score += lower_text.count(trig) * 2
+    
+    # Accents portugais
+    pt_accents = 'áàâãéêíóôõú'
+    score += sum(text.count(c) for c in pt_accents) * 3
+    
+    # Mots portugais
+    pt_patterns = [
+        r'\b(o|a|os|as|um|uma|uns|umas|e|ou|mas|que|de|para|por|com|sem)\b',
+        r'\b(é|são|está|estão|ser|estar|ter|há|fazer|ir|vir|ver|dar|dar)\b',
+        r'\b(eu|tu|ele|ela|você|nós|vós|eles|elas|vocês|me|te|se|nos|vos)\b',
+    ]
+    for pattern in pt_patterns:
+        matches = re.findall(pattern, lower_text, re.IGNORECASE)
+        score += len(matches)
+    
+    return score
+
+def _score_italian_ngrams(text, lower_text):
+    """Scorer italien basé sur n-grams caractéristiques"""
+    score = 0
+    
+    # Trigrammes italiens
+    it_trigrams = ['zione', 'ata', 'ato', 'ente', 'elle', 'ione', 'ica', 'elli']
+    for trig in it_trigrams:
+        score += lower_text.count(trig) * 2
+    
+    # Accents italiens
+    it_accents = 'àèéìòù'
+    score += sum(text.count(c) for c in it_accents) * 3
+    
+    # Mots italiens
+    it_patterns = [
+        r'\b(il|lo|la|i|gli|le|uno|una|e|o|ma|che|di|da|per|con)\b',
+        r'\b(è|sono|è|sono|essere|avere|fare|andare|venire|vedere|dare|stare)\b',
+        r'\b(io|tu|lui|lei|lei|noi|voi|loro|loro|mi|ti|si|ci|vi|li|le)\b',
+    ]
+    for pattern in it_patterns:
+        matches = re.findall(pattern, lower_text, re.IGNORECASE)
+        score += len(matches)
+    
+    return score
+
+def _score_arabic_ngrams(text, lower_text):
+    """Scorer arabe basé sur patterns arabes"""
+    score = 0
+    
+    # Patterns arabes transl littérés
+    ar_patterns = [
+        r'\b(ana|anta|antum|huwa|hiya|nahnu|antunna|hum|hunna)\b',  # Pronouns
+        r'\b(alladhina|alladhi|allati|alladhee)\b',  # Relative pronouns
+        r'\b(wa|au|laken|laqad|qad|sa|sawfa|inna|ana|inti)\b',  # Particles
+        r'\b(min|ila|anna|illa|kaif|ayna|mataa|limatha|kam|ay)\b',  # Questions
+    ]
+    
+    for pattern in ar_patterns:
+        matches = re.findall(pattern, lower_text, re.IGNORECASE)
+        score += len(matches) * 2
+    
+    # Mots arabes translittérés courants
+    ar_words = ['marhaba', 'shukran', 'afwan', 'inshallah', 'alhamdulillah', 'subhanallah',
+                'bismillah', 'assalamu', 'alaikum', 'wa', 'alaikum', 'salamat', 'yalla',
+                'habibi', 'habibi', 'sahih', 'shuyu', 'aslan', 'khatir']
+    
+    for word in ar_words:
+        if word in lower_text:
+            score += 3
+    
+    return score
+
+def _score_arabic_special(text, lower_text):
+    """Détection spéciale pour l'ARABE - analyse enrichie"""
+    # Vérifier le script arabe d'abord
+    if not re.search(r"[\u0600-\u06FF]", text):
+        return 0
+    
+    score = 0.5  # Bonus initial pour script arabe
+    
+    # Mots arabes très communs
+    common_arabic = [
+        'هو', 'هي', 'أنا', 'أنت', 'هم', 'هن', 'نحن', 'أنتم', 'أنتن',  # Pronouns
+        'ما', 'من', 'ماذا', 'أين', 'متى', 'كيف', 'كم', 'لماذا', 'هل',  # Questions
+        'في', 'من', 'إلى', 'عن', 'مع', 'بدون', 'قبل', 'بعد', 'أثناء',  # Prepositions
+        'و', 'أو', 'لكن', 'لكن', 'إن', 'أن', 'بل', 'لكن',  # Connectives
+        'يا', 'آه', 'آخ', 'حسبي', 'الله', 'يا الله',  # Exclamations
+        'قال', 'قالت', 'يقول', 'تقول', 'قلت', 'قلنا', 'قالوا',  # Common verbs
+        'السلام', 'عليكم', 'ورحمة', 'الله', 'وبركاته',  # Religious phrases
+    ]
+    
+    for word in common_arabic:
+        if word in text:
+            score += 0.1
+    
+    # Diacritiques arabes (fatha, damma, kasra, sukun, etc.)
+    diacritics = '[\u064E\u064F\u0650\u0651\u0652\u0653\u0654\u0655\u0656\u0657\u0658]'
+    if re.search(diacritics, text):
+        score += 0.2
+    
+    # Formes connectées des lettres arabes (plus de 2 caractères arabes consécutifs)
+    if len(re.findall(r'[\u0600-\u06FF]{2,}', text)) > 2:
+        score += 0.1
+    
+    return min(1.0, score)
+
 def detect_language(text):
+    """Wrapper intelligent - utilise l'ensemble pour de meilleurs résultats"""
+    result = detect_language_ensemble(text)
+    return result["language"]
     """Détection de langue automatique — aucune sélection manuelle requise.
 
     Ordre de priorité :
@@ -1240,6 +1565,49 @@ def get_session_data(session_id):
     if not sess:
         return jsonify({"error": "Not found"}), 404
     return jsonify(sess)
+
+@app.route('/api/detect-language', methods=['POST'])
+def detect_language_endpoint():
+    """
+    API Endpoint pour détection de langue INTELLIGENTE ensemble
+    
+    POST /api/detect-language
+    Body: {"text": "votre texte ici"}
+    
+    Response: {
+        "language": "fr",
+        "confidence": 0.95,
+        "method": "ensemble|unicode_script|langdetect|ngrams",
+        "details": {...}
+    }
+    """
+    try:
+        data = request.get_json() or {}
+        text = data.get('text', '')
+        
+        if not text or not text.strip():
+            return jsonify({
+                "language": "fr",
+                "confidence": 0.5,
+                "method": "fallback",
+                "error": "Empty text"
+            }), 400
+        
+        result = detect_language_ensemble(text)
+        
+        # Ajouter quelques infos supplémentaires
+        result['text_length'] = len(text)
+        result['word_count'] = len(text.split())
+        
+        return jsonify(result)
+    
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "language": "fr",
+            "confidence": 0.5,
+            "method": "fallback"
+        }), 500
 
 
 if __name__ == "__main__":

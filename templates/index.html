@@ -3733,13 +3733,58 @@ document.addEventListener('DOMContentLoaded', function() {
     'fr-FR': '🇫🇷 FR', 'en-US': '🇺🇸 EN', 'es-ES': '🇪🇸 ES', 'pt-BR': '🇧🇷 PT'
   };
 
-  function detectLangCode(text) {
+  // 🧠 DÉTECTION INTELLIGENTE - Appelle le backend pour analyse NLP
+  async function detectLangCode(text) {
     if (!text || text.trim().length < 2) return null;
+    
+    try {
+      // Appeler l'endpoint backend intelligent
+      const response = await fetch('/api/detect-language', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text })
+      });
+      
+      if (!response.ok) {
+        console.warn('Language detection failed, using fallback');
+        return await detectLangCodeFallback(text);
+      }
+      
+      const result = await response.json();
+      console.log(`[LANG] Detected: ${result.language} (confidence: ${result.confidence.toFixed(2)}, method: ${result.method})`);
+      
+      // Mapper le code ISO à la locale Web Speech API
+      const langMap = {
+        'ar': 'ar-SA',
+        'en': 'en-US',
+        'fr': 'fr-FR',
+        'es': 'es-ES',
+        'de': 'de-DE',
+        'pt': 'pt-BR',
+        'it': 'it-IT',
+        'ru': 'ru-RU',
+        'zh': 'zh-CN',
+        'ja': 'ja-JP',
+        'ko': 'ko-KR',
+        'nl': 'nl-NL',
+        'pl': 'pl-PL',
+        'sv': 'sv-SE',
+        'tr': 'tr-TR'
+      };
+      
+      return langMap[result.language] || null;
+      
+    } catch (error) {
+      console.warn('Language detection API error:', error);
+      return await detectLangCodeFallback(text);
+    }
+  }
+
+  // Fallback local si API échoue (détection simple)
+  async function detectLangCodeFallback(text) {
     var t = text.toLowerCase();
     
-    // ─────────────────────────────────────────────────────────────
-    // PRIORITÉ 1: Scripts non-latins (100% fiable)
-    // ─────────────────────────────────────────────────────────────
+    // PRIORITÉ 1: Scripts non-latins (Unicode - 100% fiable)
     if (/[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text)) return 'ar-SA';
     if (/[\u0400-\u04FF]/.test(text)) return 'ru-RU';
     if (/[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/.test(text)) return 'zh-CN';
@@ -3866,16 +3911,20 @@ document.addEventListener('DOMContentLoaded', function() {
       // Auto-détection sur texte interim (dès qu'on a ≥3 caractères)
       var sample = (interimText || pendingTranscript || '').trim();
       if (sample.length >= 3) {
-        var detected = detectLangCode(sample);
-        if (detected && detected !== detectedLang) {
-          detectedLang = detected;
-          updateBadge(detectedLang);
-          // Redémarrer avec la bonne langue (si pas déjà en cours)
-          if (!restartPending) {
-            restartPending = true;
-            try { r.stop(); } catch(e) {}
+        // Détection asynchrone intelligente
+        detectLangCode(sample).then(function(detected) {
+          if (detected && detected !== detectedLang) {
+            detectedLang = detected;
+            updateBadge(detectedLang);
+            // Redémarrer avec la bonne langue (si pas déjà en cours)
+            if (!restartPending) {
+              restartPending = true;
+              try { r.stop(); } catch(e) {}
+            }
           }
-        }
+        }).catch(function(err) {
+          console.warn('Language detection error:', err);
+        });
       }
     };
 

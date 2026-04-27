@@ -1,8 +1,0 @@
-title: Nafti AI - Chat & Image Generator
-emoji: 🎨💬
-colorFrom: indigo
-colorTo: purple
-sdk: docker
-pinned: false
-app_port: 5000
-hardware: t4-gpu

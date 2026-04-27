@@ -3701,17 +3701,20 @@ window.shareConversation = function() {
 </html>
 
 <script>
-// === Reconnaissance vocale — Langue verrouillée (sans auto-détection) ===
+// === Reconnaissance vocale — robuste + anti-duplication ===
 var VoiceRecognitionController = (function() {
   var STORAGE_KEY = 'nafti_voice_lang';
-  var isListening = false;
+  var wantsListening = false;
   var recognition = null;
-  var lastProcessedIndex = -1;
-  var lockedLang = null;  // 🔥 Variable globale du scope IIFE
+  var lockedLang = null;
   
   var voiceBtn = null;
   var messageInput = null;
   var voiceLangSelect = null;
+
+  var baseTextAtStart = '';
+  var lastSetValue = '';
+  var restartTimer = null;
 
   // ── Fonctions utilitaires ─────────────────────────────────────
   function normalizeArabic(text) {
@@ -3720,6 +3723,10 @@ var VoiceRecognitionController = (function() {
       .replace(/\u0649/g, '\u064a')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  function normalizeSpaces(text) {
+    return (text || '').replace(/\s+/g, ' ').trim();
   }
 
   function isArabicText(text) {
@@ -3734,6 +3741,87 @@ var VoiceRecognitionController = (function() {
     localStorage.setItem(STORAGE_KEY, lang);
   }
 
+  function tokensEqual(a, b) {
+    if (!a || !b) return a === b;
+    // Comparaison tolérante (utile pour FR/EN). Pour l'arabe, toLowerCase() est neutre.
+    return a.toLowerCase() === b.toLowerCase();
+  }
+
+  function mergeWithOverlap(prev, next) {
+    prev = normalizeSpaces(prev);
+    next = normalizeSpaces(next);
+    if (!prev) return next;
+    if (!next) return prev;
+
+    var a = prev.split(' ');
+    var b = next.split(' ');
+    var maxK = Math.min(a.length, b.length, 12);
+
+    for (var k = maxK; k >= 1; k--) {
+      var ok = true;
+      for (var j = 0; j < k; j++) {
+        if (!tokensEqual(a[a.length - k + j], b[j])) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) {
+        var rest = b.slice(k).join(' ');
+        return rest ? (prev + ' ' + rest) : prev;
+      }
+    }
+
+    return prev + ' ' + next;
+  }
+
+  function mergeSegments(segments) {
+    var out = '';
+    for (var i = 0; i < segments.length; i++) {
+      var s = normalizeSpaces(segments[i]);
+      if (!s) continue;
+      out = mergeWithOverlap(out, s);
+    }
+    return out;
+  }
+
+  function collapseRepeatedWords(text) {
+    text = normalizeSpaces(text);
+    if (!text) return '';
+    var parts = text.split(' ');
+    if (parts.length <= 2) return text;
+
+    var out = [];
+    var prevKey = null;
+    var run = 0;
+
+    for (var i = 0; i < parts.length; i++) {
+      var tok = parts[i];
+      var key = (tok || '').toLowerCase();
+
+      if (key && key === prevKey) {
+        run += 1;
+        // Conserver au maximum 2 occurrences consécutives d'un même mot
+        if (run >= 2) continue;
+      } else {
+        prevKey = key;
+        run = 0;
+      }
+
+      out.push(tok);
+    }
+
+    return out.join(' ');
+  }
+
+  function joinBaseAndDictation(base, dictation) {
+    var baseClean = (base || '').replace(/\s+$/g, '');
+    dictation = normalizeSpaces(dictation);
+
+    if (!dictation) return baseClean;
+    if (!baseClean) return dictation;
+    return baseClean + ' ' + dictation;
+  }
+
   function buildRecognition(lang) {
     var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     var r = new SR();
@@ -3744,78 +3832,132 @@ var VoiceRecognitionController = (function() {
     return r;
   }
 
+  function updateUI(listening) {
+    if (!voiceBtn) return;
+    if (listening) {
+      voiceBtn.classList.add('listening');
+      voiceBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+    } else {
+      voiceBtn.classList.remove('listening');
+      voiceBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+    }
+  }
+
+  function safeSetInputValue(val) {
+    if (!messageInput) return;
+    if (val === lastSetValue) return;
+    messageInput.value = val;
+    lastSetValue = val;
+    messageInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function extractDictationText(results) {
+    var finalSegments = [];
+    var interim = '';
+
+    for (var i = 0; i < results.length; i++) {
+      var res = results[i];
+      if (!res || !res[0]) continue;
+
+      var t = normalizeSpaces(res[0].transcript || '');
+      if (!t) continue;
+
+      if (lockedLang && lockedLang.startsWith('ar')) {
+        t = normalizeArabic(t);
+        if (res.isFinal && !isArabicText(t)) {
+          continue;
+        }
+      }
+
+      if (res.isFinal) {
+        finalSegments.push(t);
+      } else {
+        interim = t; // Dernier interim connu
+      }
+    }
+
+    var finalText = mergeSegments(finalSegments);
+    var fullText = interim ? mergeWithOverlap(finalText, interim) : finalText;
+    return collapseRepeatedWords(fullText);
+  }
+
+  function scheduleRestart(delayMs) {
+    if (!wantsListening) return;
+    if (restartTimer) {
+      clearTimeout(restartTimer);
+      restartTimer = null;
+    }
+
+    restartTimer = setTimeout(function() {
+      restartTimer = null;
+      if (!wantsListening || !recognition) return;
+      try {
+        recognition.start();
+      } catch (e) {
+        // start() peut échouer si l'API est encore en transition.
+        scheduleRestart(Math.min((delayMs || 250) * 2, 2000));
+      }
+    }, delayMs || 250);
+  }
+
   function startListening() {
-    if (isListening) return;
+    if (wantsListening) return;
     if (!messageInput) {
       console.error('[Voice] messageInput not found');
       return;
     }
     
-    isListening = false;  // sera mis à true par onstart
-    lastProcessedIndex = -1;
-    lockedLang = getVoiceLang();  // 🔥 Définir au niveau de l'IIFE
+    wantsListening = true;
+    lockedLang = getVoiceLang();
     console.log('[Voice] Starting recognition with language:', lockedLang);
+
+    baseTextAtStart = messageInput.value || '';
+    lastSetValue = messageInput.value || '';
     
     recognition = buildRecognition(lockedLang);
 
     recognition.onstart = function() {
       console.log('[Voice] Recognition started');
-      isListening = true;
-      lastProcessedIndex = -1;
-      voiceBtn.classList.add('listening');
-      voiceBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+      updateUI(true);
     };
 
     recognition.onresult = function(event) {
-      console.log('[Voice] Result event, isFinal:', event.results[event.results.length - 1].isFinal, 'results.length:', event.results.length);
-      
-      for (var i = Math.max(lastProcessedIndex + 1, 0); i < event.results.length; i++) {
-        var result = event.results[i];
-        
-        if (!result.isFinal) {
-          lastProcessedIndex = i;
-          continue;
-        }
+      if (!wantsListening) return;
 
-        var transcript = (result[0].transcript || '').trim();
-        if (!transcript) {
-          lastProcessedIndex = i;
-          continue;
-        }
-
-        // 🔒 ARABE: validation
-        if (lockedLang && lockedLang.startsWith('ar')) {
-          transcript = normalizeArabic(transcript);
-          if (!isArabicText(transcript)) {
-            console.log('[Voice] Rejected non-Arabic text:', result[0].transcript);
-            lastProcessedIndex = i;
-            continue;
-          }
-        }
-
-        // ✅ Ajouter le texte
-        var current = messageInput.value.trim();
-        if (current && !current.endsWith(' ')) {
-          current += ' ';
-        }
-        messageInput.value = current + transcript;
-        messageInput.dispatchEvent(new Event('input'));
-        console.log('[Voice] Added transcript:', transcript);
-        
-        lastProcessedIndex = i;
+      // Si l'utilisateur a modifié le champ entre deux events, on repart de la valeur courante.
+      if (messageInput && messageInput.value !== lastSetValue) {
+        baseTextAtStart = messageInput.value || '';
+        lastSetValue = messageInput.value || '';
       }
+
+      var dictation = extractDictationText(event.results || []);
+      safeSetInputValue(joinBaseAndDictation(baseTextAtStart, dictation));
     };
 
     recognition.onerror = function(e) {
       console.error('[Voice] Error:', e.error);
-      if (e.error !== 'no-speech' && e.error !== 'aborted') {
+      if (!wantsListening) return;
+
+      // Cas fréquents: l'API coupe, on redémarre proprement.
+      if (e.error === 'no-speech' || e.error === 'audio-capture' || e.error === 'network') {
+        scheduleRestart(400);
+        return;
+      }
+
+      // Permission / blocage: on stoppe.
+      if (e.error !== 'aborted') {
         stopListening(true);
       }
     };
 
     recognition.onend = function() {
       console.log('[Voice] Recognition ended');
-      stopListening(false);
+      if (wantsListening) {
+        // Ne pas basculer l'UI: on reste en "écoute" et on relance doucement.
+        scheduleRestart(250);
+      } else {
+        updateUI(false);
+      }
     };
 
     try {
@@ -3827,12 +3969,14 @@ var VoiceRecognitionController = (function() {
   }
 
   function stopListening(force) {
-    if (!isListening && !force) return;
+    if (!wantsListening && !force) return;
     console.log('[Voice] Stopping recognition');
-    isListening = false;
-    lastProcessedIndex = -1;
-    voiceBtn.classList.remove('listening');
-    voiceBtn.innerHTML = '<i class="fa-solid fa-microphone"></i>';
+    wantsListening = false;
+    if (restartTimer) {
+      clearTimeout(restartTimer);
+      restartTimer = null;
+    }
+    updateUI(false);
     try { if (recognition) recognition.stop(); } catch(e) {}
     if (messageInput) messageInput.focus();
   }
@@ -3861,13 +4005,17 @@ var VoiceRecognitionController = (function() {
       voiceLangSelect.addEventListener('change', function() {
         setVoiceLang(this.value);
         console.log('[Voice] Language changed to:', this.value);
+        if (wantsListening) {
+          stopListening(true);
+          setTimeout(function() { startListening(); }, 200);
+        }
       });
     }
 
     voiceBtn.addEventListener('click', function(e) {
-      console.log('[Voice] Button clicked, isListening:', isListening);
+      console.log('[Voice] Button clicked, wantsListening:', wantsListening);
       e.preventDefault();
-      if (isListening) {
+      if (wantsListening) {
         stopListening(true);
       } else {
         startListening();

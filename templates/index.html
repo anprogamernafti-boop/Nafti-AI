@@ -2256,7 +2256,6 @@ transform: translateY(-1px);
       <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="da-DK">🇩🇰 DA - Dansk</button>
       <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="fi-FI">🇫🇮 FI - Suomi</button>
       <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="el-GR">🇬🇷 EL - Ελληνικά</button>
-      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="he-IL">🇮🇱 HE - עברית</button>
       <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="id-ID">🇮🇩 ID - Bahasa Indonesia</button>
       <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="vi-VN">🇻🇳 VI - Tiếng Việt</button>
     </div>
@@ -3144,7 +3143,6 @@ function detectLanguage(text) {
     'zh': { lang: 'zh', langCode: 'zh-CN' },
     'ko': { lang: 'ko', langCode: 'ko-KR' },
     'el': { lang: 'el', langCode: 'el-GR' },
-    'he': { lang: 'he', langCode: 'he-IL' },
     'hi': { lang: 'hi', langCode: 'hi-IN' },
     'th': { lang: 'th', langCode: 'th-TH' },
     'tr': { lang: 'tr', langCode: 'tr-TR' },
@@ -3172,7 +3170,6 @@ function detectLanguage(text) {
   if (/[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]/.test(text)) return r('zh');
   if (/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/.test(text)) return r('ko');
   if (/[\u0370-\u03FF\u1F00-\u1FFF]/.test(text)) return r('el');
-  if (/[\u0590-\u05FF\uFB1D-\uFB4F]/.test(text)) return r('he');
   if (/[\u0900-\u097F]/.test(text)) return r('hi');
   if (/[\u0E00-\u0E7F]/.test(text)) return r('th');
 

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Galerie - Nafti AI</title><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"><style>
+:root{--bg:#f6f7fb;--card:#fff;--text:#17171c;--muted:#667;--brand:#0b8f94;--border:rgba(0,0,0,.08);--r:14px}*{box-sizing:border-box;margin:0;padding:0}body{font-family:Manrope,sans-serif;background:var(--bg);color:var(--text)}.wrap{max-width:1100px;margin:auto;padding:20px 16px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.btn{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#fff;text-decoration:none;color:var(--text);font-weight:700}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.chip{border:1px solid var(--border);background:#fff;padding:8px 11px;border-radius:999px;cursor:pointer}.chip.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;position:relative}.thumb-wrap{aspect-ratio:1/1;position:relative}.skeleton{position:absolute;inset:0;background:linear-gradient(90deg,#eceef4 25%,#f7f8fb 50%,#eceef4 75%);background-size:200% 100%;animation:shimmer 1.2s infinite}.thumb{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .35s}
+@keyframes shimmer{to{background-position:-200% 0}}.meta{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;font-size:13px}.like{border:0;background:none;cursor:pointer}.like.on{color:#e11d48}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;padding:20px}.modal.open{display:flex}.modal img{max-width:min(90vw,900px);max-height:82vh;border-radius:16px}
+.actions{display:flex;gap:8px;position:absolute;bottom:16px;right:16px}.act{background:#fff;border:0;border-radius:10px;padding:8px 10px;cursor:pointer}
+@media(max-width:920px){.grid{grid-template-columns:repeat(3,1fr)}}@media(max-width:700px){.grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:460px){.grid{grid-template-columns:1fr}}
+</style></head>
+<body><div class="wrap"><div class="top"><h1>Galerie & Portfolio</h1><div style="display:flex;gap:8px"><a class="btn" href="/">Accueil</a><a class="btn" href="/settings">Paramètres</a></div></div>
+<div class="filters" id="filters"></div><div class="grid" id="grid"></div></div>
+<div class="modal" id="modal"><img id="modalImg" alt="Zoom image"><div class="actions"><button class="act" id="shareBtn"><i class="fa-solid fa-share-nodes"></i> Share</button><button class="act" id="dlBtn"><i class="fa-solid fa-download"></i> Download</button><button class="act" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button></div></div>
+<script>
+const styles=['Tous','Art','Photo-réaliste','3D','Anime'];
+const images=Array.from({length:16}).map((_,i)=>({id:i+1,style:styles[(i%4)+1],src:`https://picsum.photos/seed/gallery${i+1}/600/600`}));
+const likes=JSON.parse(localStorage.getItem('nafti-gallery-likes')||'{}');
+const grid=document.getElementById('grid'); const f=document.getElementById('filters'); let active='Tous'; let current='';
+function saveLikes(){localStorage.setItem('nafti-gallery-likes',JSON.stringify(likes));}
+function renderFilters(){f.innerHTML='';styles.forEach(s=>{const b=document.createElement('button');b.className='chip'+(s===active?' active':'');b.textContent=s;b.onclick=()=>{active=s;renderFilters();renderGrid();};f.appendChild(b);});}
+function cardTpl(it){const on=!!likes[it.id];return `<article class="card" data-style="${it.style}"><div class="thumb-wrap"><div class="skeleton"></div><img loading="lazy" class="thumb" src="${it.src}" alt="${it.style}" onclick="openModal('${it.src}')"></div><div class="meta"><span>${it.style}</span><button class="like ${on?'on':''}" onclick="toggleLike(${it.id},this)"><i class="fa-solid fa-heart"></i></button></div></article>`}
+function renderGrid(){const list=active==='Tous'?images:images.filter(i=>i.style===active);grid.innerHTML=list.map(cardTpl).join('');document.querySelectorAll('.thumb').forEach(img=>img.addEventListener('load',()=>{img.style.opacity='1';img.previousElementSibling.remove();}));}
+function toggleLike(id,el){likes[id]=!likes[id];el.classList.toggle('on',likes[id]);saveLikes();}
+function openModal(src){current=src;document.getElementById('modalImg').src=src;document.getElementById('modal').classList.add('open');}
+function closeModal(){document.getElementById('modal').classList.remove('open');}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
+document.getElementById('shareBtn').onclick=async()=>{if(navigator.share){try{await navigator.share({title:'Nafti Gallery',url:current});}catch(e){}}else{navigator.clipboard.writeText(current);alert('Lien copié');}};
+document.getElementById('dlBtn').onclick=()=>{const a=document.createElement('a');a.href=current;a.download='nafti-gallery.jpg';a.click();};
+renderFilters();renderGrid();
+</script></body></html>

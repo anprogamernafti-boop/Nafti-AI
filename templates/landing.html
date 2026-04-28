@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nafti AI - Créez, partagez, inspirez</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    :root{--bg:#f6f7fb;--card:#ffffff;--text:#17171c;--muted:#666a76;--brand:#0b8f94;--brand2:#c79b3b;--border:rgba(0,0,0,.08);--shadow:0 14px 40px rgba(17,22,35,.08);--r:18px}
+    *{box-sizing:border-box;margin:0;padding:0} body{font-family:Manrope,sans-serif;background:radial-gradient(circle at 10% 0%,rgba(11,143,148,.12),transparent 30%),radial-gradient(circle at 90% 20%,rgba(199,155,59,.12),transparent 30%),var(--bg);color:var(--text)}
+    .wrap{max-width:1140px;margin:auto;padding:22px 18px}
+    .nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:34px}.logo{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:24px}
+    .btn{border:0;border-radius:14px;padding:12px 16px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;transition:.25s}.btn:hover{transform:translateY(-2px)}
+    .btn-main{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff}.btn-light{background:#fff;border:1px solid var(--border);color:var(--text)}
+    .hero{display:grid;grid-template-columns:1.05fr .95fr;gap:20px;align-items:center}.hero h1{font-family:'Space Grotesk',sans-serif;font-size:52px;line-height:1.02}.hero p{margin:16px 0;color:var(--muted);max-width:560px}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:22px}.stat{background:var(--card);border:1px solid var(--border);padding:14px;border-radius:14px;box-shadow:var(--shadow)}.stat b{font-size:24px;display:block}
+    .panel{background:var(--card);border:1px solid var(--border);box-shadow:var(--shadow);border-radius:var(--r);padding:20px}
+    .grid8{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.grid8 img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;opacity:0;animation:fade .7s ease forwards}
+    .grid8 img:nth-child(n){animation-delay:calc(var(--i)*.06s)}
+    @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+    section{margin-top:46px}.title{font-family:'Space Grotesk',sans-serif;font-size:28px;margin-bottom:14px}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card{background:var(--card);border:1px solid var(--border);padding:18px;border-radius:14px;box-shadow:var(--shadow)}
+    .pricing{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.plan h3{margin-bottom:8px}.price{font-size:34px;font-weight:800}
+    details{background:#fff;border:1px solid var(--border);padding:12px;border-radius:12px;margin-bottom:8px}
+    .auth{display:grid;grid-template-columns:1fr 1fr;gap:12px}.auth form{display:flex;flex-direction:column;gap:8px}.auth input{padding:10px 12px;border-radius:10px;border:1px solid var(--border)}
+    footer{margin:42px 0 20px;color:var(--muted);font-size:14px;text-align:center}
+    @media(max-width:900px){.hero{grid-template-columns:1fr}.cards,.pricing,.auth,.grid8{grid-template-columns:1fr 1fr}.hero h1{font-size:40px}.stats{grid-template-columns:1fr}}
+    @media(max-width:560px){.cards,.pricing,.auth,.grid8{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav class="nav"><div class="logo">Nafti AI</div><div style="display:flex;gap:8px"><a class="btn btn-light" href="/gallery">Galerie</a><a class="btn btn-light" href="/profile">Profil</a></div></nav>
+    <section class="hero">
+      <div>
+        <h1>La vitrine premium de vos créations IA</h1>
+        <p>Interface plus claire, portfolio plus pro, onboarding guidé et paramètres avancés pour une expérience digne d’un produit SaaS premium.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn btn-main" href="#auth">Commencer gratuitement</a><a class="btn btn-light" href="/gallery">Voir la galerie</a></div>
+        <div class="stats"><div class="stat"><b>1.2M+</b><span>Images explorées</span></div><div class="stat"><b>48k</b><span>Utilisateurs actifs/mois</span></div><div class="stat"><b>97%</b><span>Taux de satisfaction</span></div></div>
+      </div>
+      <div class="panel"><div class="grid8">
+        <img style="--i:1" loading="lazy" src="https://picsum.photos/seed/nafti1/400/400" alt="ex1"><img style="--i:2" loading="lazy" src="https://picsum.photos/seed/nafti2/400/400" alt="ex2"><img style="--i:3" loading="lazy" src="https://picsum.photos/seed/nafti3/400/400" alt="ex3"><img style="--i:4" loading="lazy" src="https://picsum.photos/seed/nafti4/400/400" alt="ex4"><img style="--i:5" loading="lazy" src="https://picsum.photos/seed/nafti5/400/400" alt="ex5"><img style="--i:6" loading="lazy" src="https://picsum.photos/seed/nafti6/400/400" alt="ex6"><img style="--i:7" loading="lazy" src="https://picsum.photos/seed/nafti7/400/400" alt="ex7"><img style="--i:8" loading="lazy" src="https://picsum.photos/seed/nafti8/400/400" alt="ex8">
+      </div></div>
+    </section>
+
+    <section><h2 class="title">Avantages</h2><div class="cards"><div class="card"><h3>UX fluide</h3><p>Transitions douces, micro-animations et feedback clair.</p></div><div class="card"><h3>Portfolio pro</h3><p>Filtres, favoris, lightbox, partage en un clic.</p></div><div class="card"><h3>Paramètres avancés</h3><p>Presets rapides, export/import, configuration tabulée.</p></div></div></section>
+
+    <section><h2 class="title">Tarifs</h2><div class="pricing"><div class="card plan"><h3>Starter</h3><div class="price">0€</div><p>Découverte et tests.</p></div><div class="card plan" style="border-color:var(--brand)"><h3>Pro</h3><div class="price">19€</div><p>Créateurs réguliers.</p></div><div class="card plan"><h3>Studio</h3><div class="price">49€</div><p>Équipes et workflows.</p></div></div></section>
+
+    <section><h2 class="title">Témoignages</h2><div class="cards"><div class="card">“L’interface est plus premium, on va plus vite.”</div><div class="card">“Les presets + galerie nous font gagner du temps.”</div><div class="card">“Le profil et les badges motivent l’équipe.”</div></div></section>
+
+    <section><h2 class="title">FAQ</h2><details><summary>Puis-je utiliser la galerie sans générer ?</summary><p>Oui, cette refonte n’impacte pas le moteur de génération.</p></details><details><summary>Les favoris sont-ils persistants ?</summary><p>Oui, localement via votre navigateur.</p></details><details><summary>Puis-je exporter mes réglages ?</summary><p>Oui, JSON export/import disponible dans paramètres.</p></details></section>
+
+    <section id="auth" class="panel"><h2 class="title">Connexion / Inscription</h2><div class="auth"><form method="POST" action="/login"><input name="email" type="email" placeholder="Email" required><input name="password" type="password" placeholder="Mot de passe" required><button class="btn btn-main" type="submit">Se connecter</button></form><form method="POST" action="/register"><input name="email" type="email" placeholder="Email" required><input name="password" type="password" placeholder="Mot de passe" required><button class="btn btn-light" type="submit">Créer un compte</button></form></div></section>
+
+    <footer>Nafti AI • Expérience premium</footer>
+  </div>
+</body>
+</html>

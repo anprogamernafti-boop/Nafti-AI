@@ -1031,17 +1031,28 @@ def track_response(response):
 
 @app.route("/")
 def index():
-    """Render the main template; template passes chat sessions list"""
+    """Landing for visitors, chat app for logged users."""
     user = session.get('user')
+    if not user:
+        return render_template('landing.html')
     sessions = []
-    if user:
-        histories = ensure_user_sessions(user)
-        sessions = histories.get(user, [])
+    histories = ensure_user_sessions(user)
+    sessions = histories.get(user, [])
     response = app.make_response(render_template('index.html', sessions=sessions))
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     return response
+
+@app.route('/gallery')
+def gallery_view():
+    return render_template('gallery.html')
+
+@app.route('/profile')
+def profile_view():
+    if not session.get('user'):
+        return redirect(url_for('index'))
+    return render_template('profile.html')
 
 @app.route('/generate-image')
 def generate_image():

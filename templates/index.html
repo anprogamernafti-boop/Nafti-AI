@@ -865,7 +865,7 @@ transform: translateY(0) scale(1);
 position: absolute;
 right: 0;
 bottom: calc(100% + 10px);
-min-width: 116px;
+width: 220px;
 padding: 6px;
 border-radius: 12px;
 border: 1.5px solid var(--border);
@@ -879,6 +879,47 @@ transform-origin: bottom right;
 pointer-events: none;
 transition: opacity .22s ease, transform .22s cubic-bezier(.22,1,.36,1);
 z-index: 100;
+}
+
+.voice-lang-search-wrap {
+padding: 2px 2px 6px;
+}
+
+.voice-lang-search {
+width: 100%;
+height: 32px;
+border: 1.5px solid var(--border);
+border-radius: 8px;
+padding: 0 10px;
+background: var(--bg-primary);
+color: var(--text-primary);
+font-size: 12px;
+font-weight: 500;
+font-family: inherit;
+outline: none;
+transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.voice-lang-search:focus {
+border-color: var(--accent);
+box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.voice-lang-options {
+max-height: 220px;
+overflow-y: auto;
+display: grid;
+gap: 4px;
+padding-right: 2px;
+}
+
+.voice-lang-options::-webkit-scrollbar {
+width: 4px;
+}
+
+.voice-lang-options::-webkit-scrollbar-thumb {
+background: var(--scrollbar-thumb);
+border-radius: 6px;
 }
 
 .voice-control.lang-open .voice-lang-menu {
@@ -2171,9 +2212,41 @@ transform: translateY(-1px);
   </button>
   <span class="voice-lang-badge" id="voiceLangBadge">FR</span>
   <div class="voice-lang-menu" id="voiceLangMenu" role="menu" aria-label="Choisir la langue vocale">
-    <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="fr-FR">🇫🇷 FR</button>
-    <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="ar-SA">🇸🇦 AR</button>
-    <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="en-US">🇺🇸 EN</button>
+    <div class="voice-lang-search-wrap">
+      <input
+        id="voiceLangSearch"
+        class="voice-lang-search"
+        type="text"
+        placeholder="Rechercher une langue..."
+        aria-label="Rechercher une langue vocale"
+      >
+    </div>
+    <div class="voice-lang-options" id="voiceLangOptions">
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="fr-FR">🇫🇷 FR - Français</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="ar-SA">🇸🇦 AR - العربية</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="en-US">🇺🇸 EN - English</button>
+
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="es-ES">🇪🇸 ES - Español</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="de-DE">🇩🇪 DE - Deutsch</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="it-IT">🇮🇹 IT - Italiano</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="pt-BR">🇧🇷 PT - Português</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="ru-RU">🇷🇺 RU - Русский</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="zh-CN">🇨🇳 ZH - 中文</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="ja-JP">🇯🇵 JA - 日本語</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="ko-KR">🇰🇷 KO - 한국어</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="hi-IN">🇮🇳 HI - हिन्दी</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="tr-TR">🇹🇷 TR - Türkçe</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="nl-NL">🇳🇱 NL - Nederlands</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="pl-PL">🇵🇱 PL - Polski</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="sv-SE">🇸🇪 SV - Svenska</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="no-NO">🇳🇴 NO - Norsk</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="da-DK">🇩🇰 DA - Dansk</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="fi-FI">🇫🇮 FI - Suomi</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="el-GR">🇬🇷 EL - Ελληνικά</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="he-IL">🇮🇱 HE - עברית</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="id-ID">🇮🇩 ID - Bahasa Indonesia</button>
+      <button class="voice-lang-option" type="button" role="menuitemradio" data-lang="vi-VN">🇻🇳 VI - Tiếng Việt</button>
+    </div>
   </div>
 </div>
 
@@ -3757,6 +3830,7 @@ var VoiceRecognitionController = (function() {
   var messageInput = null;
   var voiceLangMenu = null;
   var voiceLangBadge = null;
+  var voiceLangSearch = null;
   var voiceLangOptions = [];
 
   var baseTextAtStart = '';
@@ -3789,9 +3863,18 @@ var VoiceRecognitionController = (function() {
   }
 
   function langShortCode(lang) {
-    if (lang === 'ar-SA') return 'AR';
-    if (lang === 'en-US') return 'EN';
-    return 'FR';
+    var code = (lang || '').split('-')[0];
+    if (!code) return 'FR';
+    return code.toUpperCase();
+  }
+
+  function filterLanguageOptions(query) {
+    var q = (query || '').toLowerCase().trim();
+    for (var i = 0; i < voiceLangOptions.length; i++) {
+      var option = voiceLangOptions[i];
+      var text = (option.textContent || '').toLowerCase();
+      option.style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
+    }
   }
 
   function updateLanguageUI(lang) {
@@ -3814,6 +3897,11 @@ var VoiceRecognitionController = (function() {
     isLangMenuOpen = true;
     voiceControl.classList.add('lang-open');
     if (voiceBtn) voiceBtn.setAttribute('aria-expanded', 'true');
+    if (voiceLangSearch) {
+      voiceLangSearch.value = '';
+      filterLanguageOptions('');
+      setTimeout(function() { voiceLangSearch.focus(); }, 20);
+    }
   }
 
   function closeLanguageMenu() {
@@ -4094,6 +4182,7 @@ var VoiceRecognitionController = (function() {
     messageInput = document.getElementById('messageInput');
     voiceLangMenu = document.getElementById('voiceLangMenu');
     voiceLangBadge = document.getElementById('voiceLangBadge');
+    voiceLangSearch = document.getElementById('voiceLangSearch');
     voiceLangOptions = Array.prototype.slice.call(document.querySelectorAll('.voice-lang-option'));
 
     console.log('[Voice] Init - voiceBtn:', !!voiceBtn, 'messageInput:', !!messageInput, 'voiceLangMenu:', !!voiceLangMenu);
@@ -4123,6 +4212,21 @@ var VoiceRecognitionController = (function() {
         if (!lang) return;
         console.log('[Voice] Language changed to:', lang);
         applyVoiceLanguage(lang, true);
+      });
+    }
+
+    if (voiceLangSearch) {
+      voiceLangSearch.addEventListener('input', function() {
+        filterLanguageOptions(this.value);
+      });
+      voiceLangSearch.addEventListener('click', function(e) {
+        e.stopPropagation();
+      });
+      voiceLangSearch.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          closeLanguageMenu();
+          if (voiceBtn) voiceBtn.focus();
+        }
       });
     }
 

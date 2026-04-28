@@ -1059,6 +1059,8 @@ def get_image_pipeline():
             return None
     return image_pipeline
 
+GOOGLE_OAUTH_ENABLED = False
+
 # Google OAuth blueprint (try to register, but don't block startup if credentials missing)
 try:
     if os.getenv('GOOGLE_CLIENT_ID') and os.getenv('GOOGLE_CLIENT_SECRET'):
@@ -1069,6 +1071,7 @@ try:
             redirect_url="/google_callback"
         )
         app.register_blueprint(google_bp, url_prefix="/login")
+        GOOGLE_OAUTH_ENABLED = True
         print("✅ Google OAuth configured")
     else:
         print("⚠️  Google OAuth not configured (missing credentials)")
@@ -1130,7 +1133,12 @@ def index():
 
 @app.route('/gallery')
 def gallery_view():
-    return render_template('gallery.html')
+    return redirect(url_for('index'))
+
+@app.route('/auth/login')
+def auth_login_view():
+    google_login_url = url_for('google.login') if GOOGLE_OAUTH_ENABLED else None
+    return render_template('auth_login.html', google_oauth_enabled=GOOGLE_OAUTH_ENABLED, google_login_url=google_login_url)
 
 @app.route('/profile')
 def profile_view():
@@ -1180,7 +1188,8 @@ def login():
 
 @app.route('/settings')
 def settings_view():
-    return render_template('settings.html')
+    google_login_url = url_for('google.login') if GOOGLE_OAUTH_ENABLED else None
+    return render_template('settings.html', google_oauth_enabled=GOOGLE_OAUTH_ENABLED, google_login_url=google_login_url)
 
 @app.route('/sessions/clear-all', methods=['POST'])
 def clear_all_sessions():

@@ -23,6 +23,7 @@ except:
 os.environ.setdefault('OAUTHLIB_INSECURE_TRANSPORT', '1')
 from pathlib import Path
 from datetime import datetime
+from datetime import timedelta
 from flask_dance.contrib.google import make_google_blueprint, google
 
 # Charger les variables d'environnement depuis .env
@@ -101,6 +102,88 @@ def save_users(users):
     """Save users to JSON file"""
     with open(USERS_FILE, 'w') as f:
         json.dump(users, f)
+
+def compute_public_stats():
+    """Compute real public stats from local storage."""
+    users = load_users()
+    histories = load_history()
+
+    total_users = len(users)
+    total_sessions = 0
+    total_messages = 0
+    active_users_30d = set()
+
+    now = datetime.now()
+    cutoff = now - timedelta(days=30)
+
+    for user_email, sessions in histories.items():
+        if not isinstance(sessions, list):
+            continue
+        valid_sessions = [s for s in sessions if _is_valid_session(s)]
+        total_sessions += len(valid_sessions)
+        for sess in valid_sessions:
+            total_messages += len(sess.get("messages", []))
+            created_at = sess.get("created_at")
+            if not created_at:
+                continue
+            try:
+                created_dt = datetime.fromisoformat(created_at)
+                if created_dt >= cutoff:
+                    active_users_30d.add(user_email)
+            except Exception:
+                continue
+
+    return {
+        "total_users": total_users,
+        "total_sessions": total_sessions,
+        "total_messages": total_messages,
+        "active_users_30d": len(active_users_30d)
+    }
+
+def compute_user_stats(user_email):
+    """Compute per-user real stats."""
+    if not user_email:
+        return None
+
+    histories = ensure_user_sessions(user_email)
+    sessions = histories.get(user_email, [])
+    valid_sessions = [s for s in sessions if _is_valid_session(s)]
+
+    session_count = len(valid_sessions)
+    message_count = 0
+    assistant_count = 0
+    user_count = 0
+    first_created = None
+
+    for sess in valid_sessions:
+        if first_created is None and sess.get("created_at"):
+            first_created = sess.get("created_at")
+        for msg in sess.get("messages", []):
+            message_count += 1
+            role = msg.get("role")
+            if role == "assistant":
+                assistant_count += 1
+            elif role == "user":
+                user_count += 1
+
+    badges = []
+    if message_count >= 10:
+        badges.append("10+ messages")
+    if session_count >= 5:
+        badges.append("5+ sessions")
+    if assistant_count >= 10:
+        badges.append("Explorateur IA")
+    if not badges:
+        badges.append("Nouveau membre")
+
+    return {
+        "sessions": session_count,
+        "messages": message_count,
+        "assistant_messages": assistant_count,
+        "user_messages": user_count,
+        "badges": badges,
+        "first_created": first_created
+    }
 
 def hash_password(password):
     """Hash password using SHA256"""
@@ -1034,7 +1117,8 @@ def index():
     """Landing for visitors, chat app for logged users."""
     user = session.get('user')
     if not user:
-        return render_template('landing.html')
+        stats = compute_public_stats()
+        return render_template('landing.html', stats=stats)
     sessions = []
     histories = ensure_user_sessions(user)
     sessions = histories.get(user, [])
@@ -1052,7 +1136,8 @@ def gallery_view():
 def profile_view():
     if not session.get('user'):
         return redirect(url_for('index'))
-    return render_template('profile.html')
+    user_stats = compute_user_stats(session.get('user'))
+    return render_template('profile.html', user_stats=user_stats)
 
 @app.route('/generate-image')
 def generate_image():

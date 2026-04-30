@@ -910,6 +910,149 @@ def get_language_instruction(lang_code, prompt_text=None):
     
     return instructions.get(normalized_lang, instructions.get("en", "You MUST respond ONLY in ENGLISH."))
 
+def detect_science_domain(prompt_text):
+    """Detect whether the user is asking a science/STEM question."""
+    if not prompt_text:
+        return None
+
+    text = prompt_text.lower()
+    domain_keywords = {
+        "math": [
+            "math", "mathemat", "équation", "equation", "fonction", "function",
+            "dérivée", "derivee", "integrale", "intégrale", "logarithme", "algebra",
+            "geometry", "géométr", "trigonom", "probabil", "statistique", "matrix",
+        ],
+        "physics": [
+            "physique", "physics", "vitesse", "accélération", "acceleration",
+            "force", "energy", "énergie", "mouvement", "movement", "quantum",
+            "gravité", "gravity", "pression", "pressure", "travail", "work",
+        ],
+        "mechanics": [
+            "mécanique", "mecanique", "mechanics", "torque", "couple", "moment",
+            "frottement", "friction", "cinématique", "kinematics", "dynamique",
+            "statique", "gear", "roue", "poulie", "lever", "bending",
+        ],
+        "electricity": [
+            "élect", "elect", "circuit", "voltage", "tension", "current",
+            "courant", "resistance", "résistance", "capacitor", "condensateur",
+            "inductance", "ohm", "kirchhoff", "power", "puissance", "amper",
+        ],
+    }
+
+    scores = {}
+    for domain, keywords in domain_keywords.items():
+        score = 0
+        for keyword in keywords:
+            if keyword in text:
+                score += 1
+        if score:
+            scores[domain] = score
+
+    if not scores:
+        return None
+
+    return max(scores, key=scores.get)
+
+def build_science_instruction(domain, lang_code):
+    """Return a simple, student-friendly instruction for STEM questions."""
+    normalized_lang = (lang_code or "en").split('-')[0]
+
+    templates = {
+        "fr": {
+            "math": (
+                "Tu es un professeur clair et rigoureux en mathématiques. "
+                "Réponds de manière simple, professionnelle et pédagogique. "
+                "Structure toujours la réponse avec: 1) Idée clé, 2) Méthode, 3) Calculs ou étapes, 4) Résultat final, 5) Vérification rapide. "
+                "Explique chaque symbole ou formule utilisée. "
+                "Si la question contient des données, vérifie les unités et précise les hypothèses. "
+                "Évite le jargon inutile, mais garde la précision. "
+                "Si utile, ajoute une mini conclusion ou une astuce pour étudiant."
+            ),
+            "physics": (
+                "Tu es un professeur clair et rigoureux en physique. "
+                "Réponds de manière simple, professionnelle et pédagogique. "
+                "Structure toujours la réponse avec: 1) Principe physique, 2) Formule(s), 3) Données et unités, 4) Développement, 5) Réponse finale. "
+                "Explique le sens physique des grandeurs, vérifie les unités et signale les hypothèses importantes. "
+                "Utilise un français simple, précis, et évite les explications trop longues quand une version courte suffit."
+            ),
+            "mechanics": (
+                "Tu es un professeur clair et rigoureux en mécanique. "
+                "Réponds de manière simple, professionnelle et pédagogique. "
+                "Structure la réponse avec: 1) Schéma mental du problème, 2) Lois utilisées, 3) Calcul étape par étape, 4) Résultat avec unités, 5) Contrôle de cohérence. "
+                "Précise les forces, couples, moments ou contraintes impliqués. "
+                "Si le problème est incomplet, indique clairement quelles données manquent."
+            ),
+            "electricity": (
+                "Tu es un professeur clair et rigoureux en électricité. "
+                "Réponds de manière simple, professionnelle et pédagogique. "
+                "Structure la réponse avec: 1) Lecture du circuit, 2) Lois utilisées, 3) Calculs étape par étape, 4) Valeur finale, 5) Vérification avec les unités. "
+                "Définis clairement tension, courant, résistance, puissance ou loi de Kirchhoff quand ils apparaissent. "
+                "Si nécessaire, donne une version très courte en fin de réponse pour étudiant pressé."
+            ),
+        },
+        "en": {
+            "math": (
+                "You are a clear, rigorous math tutor. Respond in a simple, professional, and student-friendly way. "
+                "Always structure the answer as: 1) Key idea, 2) Method, 3) Steps or calculations, 4) Final result, 5) Quick check. "
+                "Explain every symbol or formula you use. If the question includes data, verify units and state assumptions. "
+                "Avoid unnecessary jargon, but keep the answer precise."
+            ),
+            "physics": (
+                "You are a clear, rigorous physics tutor. Respond in a simple, professional, and student-friendly way. "
+                "Structure the answer as: 1) Physical principle, 2) Formula(s), 3) Data and units, 4) Step-by-step derivation, 5) Final answer. "
+                "Explain the physical meaning of quantities, verify units, and highlight important assumptions."
+            ),
+            "mechanics": (
+                "You are a clear, rigorous mechanics tutor. Respond in a simple, professional, and student-friendly way. "
+                "Structure the answer as: 1) Problem setup, 2) Laws used, 3) Step-by-step calculations, 4) Result with units, 5) Consistency check. "
+                "State forces, moments, torque, or stress explicitly when relevant."
+            ),
+            "electricity": (
+                "You are a clear, rigorous electricity tutor. Respond in a simple, professional, and student-friendly way. "
+                "Structure the answer as: 1) Circuit reading, 2) Laws used, 3) Step-by-step calculations, 4) Final value, 5) Unit check. "
+                "Define voltage, current, resistance, power, or Kirchhoff's law whenever they appear."
+            ),
+        },
+    }
+
+    lang_templates = templates.get(normalized_lang, templates["en"])
+    return lang_templates.get(domain, "")
+
+def build_answer_style_instruction(prompt_text, lang_code):
+    """Build an additional instruction when the question is STEM-related."""
+    domain = detect_science_domain(prompt_text)
+    if not domain:
+        return None
+
+    domain_label = {
+        "math": "mathématiques",
+        "physics": "physique",
+        "mechanics": "mécanique",
+        "electricity": "électricité",
+    }.get(domain, domain)
+
+    science_instruction = build_science_instruction(domain, lang_code)
+    if not science_instruction:
+        return None
+
+    return f"Contexte scientifique détecté: {domain_label}. {science_instruction} Si la réponse demande un calcul, montre les étapes essentielles. Si la question est théorique, va à l'essentiel avec des exemples courts."
+
+def build_system_prompt(prompt_text, lang_code):
+    """Build the base system prompt, with STEM pedagogy when relevant."""
+    lang_instruction = get_language_instruction(lang_code, prompt_text)
+    science_instruction = build_answer_style_instruction(prompt_text, lang_code)
+
+    system_content_parts = [
+        "Tu es Nafti AI, un assistant intelligent, bienveillant et fiable.",
+        lang_instruction,
+        "Utilise le format Markdown pour structurer tes réponses quand c'est approprié.",
+        "Sois concis, précis et utile."
+    ]
+    if science_instruction:
+        system_content_parts.append(science_instruction)
+
+    return " ".join(system_content_parts)
+
 # Configuration Groq (lue depuis .env)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
@@ -1309,6 +1452,7 @@ def chat_public():
         return jsonify({"error": "Message requis"}), 400
 
     try:
+        system_prompt = build_system_prompt(message, detect_language(message))
         response = requests.post(
             GROQ_URL,
             headers={
@@ -1317,7 +1461,10 @@ def chat_public():
             },
             json={
                 "model": GROQ_MODEL,
-                "messages": [{"role": "user", "content": message}],
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": message}
+                ],
                 "max_tokens": 2048,
                 "temperature": 0.7
             },
@@ -1445,9 +1592,8 @@ def proxy_ai():
                         break
             break
     
-    # Construire le message système avec instruction de langue ferme
-    lang_instruction = get_language_instruction(detected_lang, prompt_text)
-    system_content = f"Tu es Nafti AI, un assistant intelligent et bienveillant. {lang_instruction} Utilise le format Markdown pour structurer tes réponses quand c'est approprié. Sois concis, précis et utile."
+    # Construire le message système avec instruction de langue ferme et pédagogie STEM si nécessaire
+    system_content = build_system_prompt(prompt_text, detected_lang)
     
     # Remplacer ou ajouter le message système
     api_messages = [msg for msg in api_messages if msg.get('role') != 'system']

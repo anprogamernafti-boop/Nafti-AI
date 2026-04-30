@@ -953,6 +953,31 @@ def detect_science_domain(prompt_text):
 
     return max(scores, key=scores.get)
 
+def is_scientific_document_question(prompt_text):
+    """Return True when the user likely asks about a scientific document or school material."""
+    if not prompt_text:
+        return False
+
+    text = prompt_text.lower()
+    document_keywords = [
+        "document", "doc", "pdf", "cours", "exercice", "énoncé", "enonce",
+        "chapitre", "page", "tableau", "schéma", "schema", "figure",
+        "annexe", "rapport", "polycopié", "polycopie", "devoir", "tp",
+        "science", "scientifique", "math", "maths", "physique", "mécanique",
+        "mecanique", "électricité", "electricite", "ingénierie", "ingenierie",
+    ]
+
+    if any(keyword in text for keyword in document_keywords):
+        return True
+
+    # Heuristic: questions that mention explanation, summary, or correction of a document
+    doc_intent_keywords = [
+        "explique ce document", "résume ce document", "resumes ce document",
+        "corrige cet exercice", "analyse ce document", "aide-moi avec ce pdf",
+        "traduis ce document", "question du document", "sur ce document",
+    ]
+    return any(phrase in text for phrase in doc_intent_keywords)
+
 def build_science_instruction(domain, lang_code):
     """Return a simple, student-friendly instruction for STEM questions."""
     normalized_lang = (lang_code or "en").split('-')[0]
@@ -1020,6 +1045,9 @@ def build_science_instruction(domain, lang_code):
 
 def build_answer_style_instruction(prompt_text, lang_code):
     """Build an additional instruction when the question is STEM-related."""
+    if not is_scientific_document_question(prompt_text):
+        return None
+
     domain = detect_science_domain(prompt_text)
     if not domain:
         return None

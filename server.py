@@ -1107,9 +1107,9 @@ def build_answer_style_instruction(prompt_text, lang_code):
 
     if is_exercise_or_homework_request(prompt_text):
         base_instruction += (
-            " Format OBLIGATOIRE pour exercice/devoir: traite chaque question séparément avec des sections claires "
-            "du type 'Question 1', puis 'Réponse 1'. Passe à la ligne entre chaque section. "
-            "Laisse toujours une ligne vide entre deux questions."
+            " Format OBLIGATOIRE pour exercice/devoir: réponds question par question de façon claire. "
+            "Après la réponse de chaque question, passe simplement à la ligne avant la question suivante. "
+            "Ne force pas un format rigide de type 'Question 1 / Réponse 1'."
         )
 
     return base_instruction
@@ -1181,7 +1181,7 @@ def clean_latex_math_notation(text):
     return cleaned
 
 def format_exercise_answer(text):
-    """Force readable line breaks for exercise/homework answers."""
+    """Force a simple blank line between answers and following questions."""
     if not text:
         return text
 
@@ -1190,12 +1190,12 @@ def format_exercise_answer(text):
     # Normalize line breaks first
     formatted = formatted.replace("\r\n", "\n").replace("\r", "\n")
 
-    # Ensure a blank line before each numbered question marker
+    # Insert a blank line before each new question marker.
     formatted = re.sub(r"\n?\s*(Question\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
-    formatted = re.sub(r"\n?\s*(Réponse\s*\d+\s*[:\-])", r"\n\1", formatted, flags=re.IGNORECASE)
+    formatted = re.sub(r"\n?\s*(Q\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
     formatted = re.sub(r"\n?\s*(\d+\s*[\)\.\-:])\s*", r"\n\n\1 ", formatted)
 
-    # Collapse excessive blank lines while keeping readability
+    # Keep output clean without forcing line counting.
     formatted = re.sub(r"\n{3,}", "\n\n", formatted).strip()
 
     return formatted

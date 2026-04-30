@@ -978,6 +978,26 @@ def is_scientific_document_question(prompt_text):
     ]
     return any(phrase in text for phrase in doc_intent_keywords)
 
+def is_exercise_or_homework_request(prompt_text):
+    """Detect exercise/homework style requests that need per-question formatting."""
+    if not prompt_text:
+        return False
+
+    text = prompt_text.lower()
+    exercise_keywords = [
+        "exercice", "devoir", "dm", "ds", "td", "tp", "question 1", "q1",
+        "q2", "q3", "partie a", "partie b", "réponds aux questions",
+        "reponds aux questions", "corrigé", "corrige", "problème", "probleme",
+    ]
+    if any(keyword in text for keyword in exercise_keywords):
+        return True
+
+    # Numbered-question pattern such as "1)", "2." in the user message
+    if re.search(r"(^|\n)\s*\d+\s*[\)\.\-:]", text):
+        return True
+
+    return False
+
 def build_science_instruction(domain, lang_code):
     """Return a simple, student-friendly instruction for STEM questions."""
     normalized_lang = (lang_code or "en").split('-')[0]
@@ -1079,7 +1099,20 @@ def build_answer_style_instruction(prompt_text, lang_code):
     if not science_instruction:
         return None
 
-    return f"Contexte scientifique détecté: {domain_label}. {science_instruction} Si la réponse demande un calcul, montre les étapes essentielles. Si la question est théorique, va à l'essentiel avec des exemples courts."
+    base_instruction = (
+        f"Contexte scientifique détecté: {domain_label}. {science_instruction} "
+        "Si la réponse demande un calcul, montre les étapes essentielles. "
+        "Si la question est théorique, va à l'essentiel avec des exemples courts."
+    )
+
+    if is_exercise_or_homework_request(prompt_text):
+        base_instruction += (
+            " Format OBLIGATOIRE pour exercice/devoir: traite chaque question séparément avec des sections claires "
+            "du type 'Question 1', puis 'Réponse 1'. Passe à la ligne entre chaque section. "
+            "Laisse toujours une ligne vide entre deux questions."
+        )
+
+    return base_instruction
 
 def build_system_prompt(prompt_text, lang_code):
     """Build the base system prompt, with STEM pedagogy when relevant."""
@@ -1146,6 +1179,26 @@ def clean_latex_math_notation(text):
     cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
 
     return cleaned
+
+def format_exercise_answer(text):
+    """Force readable line breaks for exercise/homework answers."""
+    if not text:
+        return text
+
+    formatted = text
+
+    # Normalize line breaks first
+    formatted = formatted.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Ensure a blank line before each numbered question marker
+    formatted = re.sub(r"\n?\s*(Question\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
+    formatted = re.sub(r"\n?\s*(Réponse\s*\d+\s*[:\-])", r"\n\1", formatted, flags=re.IGNORECASE)
+    formatted = re.sub(r"\n?\s*(\d+\s*[\)\.\-:])\s*", r"\n\n\1 ", formatted)
+
+    # Collapse excessive blank lines while keeping readability
+    formatted = re.sub(r"\n{3,}", "\n\n", formatted).strip()
+
+    return formatted
 
 # Configuration Groq (lue depuis .env)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -1547,6 +1600,7 @@ def chat_public():
 
     try:
         is_science_doc = is_scientific_document_question(message)
+        is_exercise = is_exercise_or_homework_request(message)
         system_prompt = build_system_prompt(message, detect_language(message))
         response = requests.post(
             GROQ_URL,
@@ -1571,6 +1625,8 @@ def chat_public():
         ai_message = result.get("choices", [{}])[0].get("message", {}).get("content", "")
         if is_science_doc:
             ai_message = clean_latex_math_notation(ai_message)
+        if is_science_doc and is_exercise:
+            ai_message = format_exercise_answer(ai_message)
         
         if not ai_message:
             return jsonify({"error": "Pas de réponse de l'IA"}), 500
@@ -1692,6 +1748,7 @@ def proxy_ai():
     # Construire le message système avec instruction de langue ferme et pédagogie STEM si nécessaire
     system_content = build_system_prompt(prompt_text, detected_lang)
     is_science_doc = is_scientific_document_question(prompt_text)
+    is_exercise = is_exercise_or_homework_request(prompt_text)
     
     # Remplacer ou ajouter le message système
     api_messages = [msg for msg in api_messages if msg.get('role') != 'system']
@@ -1739,6 +1796,9 @@ def proxy_ai():
         if ai_content:
             if is_science_doc:
                 ai_content = clean_latex_math_notation(ai_content)
+            if is_science_doc and is_exercise:
+                ai_content = format_exercise_answer(ai_content)
+            if is_science_doc:
                 try:
                     ai_resp["choices"][0]["message"]["content"] = ai_content
                 except Exception:

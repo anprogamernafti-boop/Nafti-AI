@@ -2676,6 +2676,7 @@ window.lastFailedPrompt = null;
 var currentAIBubble = null;
 var AI_ENDPOINT = '/api/ai';
 window.pendingAttachments = []; // [{file, dataUrl, name, size}, ...]
+window.lastAttachedImages = []; // Images attachées lors du dernier appel pour le retry
 
 var SYSTEM_MESSAGE = {
 role: 'system',
@@ -2907,6 +2908,11 @@ if (!window.lastFailedPrompt) return;
 var prompt = window.lastFailedPrompt;
 messageInput.value = prompt;
 messageInput.style.height = 'auto';
+// Restaurer les images attachées du dernier appel
+if (window.lastAttachedImages && window.lastAttachedImages.length > 0) {
+window.pendingAttachments = window.lastAttachedImages.slice();
+if (window._renderAttachPreviews) window._renderAttachPreviews();
+}
 sendMessage();
 };
 
@@ -3064,8 +3070,9 @@ if (imagesBase64 && !userContent) userContent = imagesBase64.length > 1 ? 'Analy
 window.conversationHistory.push({ role: 'user', content: userContent });
 var messages = [SYSTEM_MESSAGE].concat(window.conversationHistory);
 currentAIBubble = addAIMessage();
-// Store prompt for retry button
+// Store prompt and images for retry button
 window.lastFailedPrompt = text || (imagesBase64 ? '[Images analysées]' : '');
+window.lastAttachedImages = attachments.slice(); // Stocker les images pour le retry
 try {
 var aiText = await callAI(messages, imagesBase64);
 if (currentAIBubble) {

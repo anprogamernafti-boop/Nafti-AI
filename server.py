@@ -1109,6 +1109,7 @@ def build_answer_style_instruction(prompt_text, lang_code):
         base_instruction += (
             " Format OBLIGATOIRE pour exercice/devoir: réponds question par question de façon claire. "
             "Après la réponse de chaque question, passe simplement à la ligne avant la question suivante. "
+            "N'utilise pas de liste numérotée (pas de 1., 2), 3:). "
             "Ne force pas un format rigide de type 'Question 1 / Réponse 1'."
         )
 
@@ -1181,21 +1182,27 @@ def clean_latex_math_notation(text):
     return cleaned
 
 def format_exercise_answer(text):
-    """Force a simple blank line between answers and following questions."""
+    """Keep exercise answers on separate lines without numbered list formatting."""
     if not text:
         return text
 
     formatted = text
 
-    # Normalize line breaks first
+    # Normalize line breaks.
     formatted = formatted.replace("\r\n", "\n").replace("\r", "\n")
 
-    # Insert a blank line before each new question marker.
-    formatted = re.sub(r"\n?\s*(Question\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
-    formatted = re.sub(r"\n?\s*(Q\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
-    formatted = re.sub(r"\n?\s*(\d+\s*[\)\.\-:])\s*", r"\n\n\1 ", formatted)
+    # If question markers appear inline, push each question marker to a new paragraph.
+    formatted = re.sub(r"\s+(Question\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
+    formatted = re.sub(r"\s+(Q\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
+    formatted = re.sub(r"\s+(\d+\s*[\)\:])\s+", r"\n\n\1 ", formatted)
 
-    # Keep output clean without forcing line counting.
+    # Remove numeric list style at line start to avoid visual numbering.
+    formatted = re.sub(r"(?m)^\s*\d+\s*[\)\.\-:]\s*", "", formatted)
+    formatted = re.sub(r"(?im)^\s*question\s*\d+\s*[:\-]\s*", "Question: ", formatted)
+    formatted = re.sub(r"(?im)^\s*réponse\s*\d+\s*[:\-]\s*", "Réponse: ", formatted)
+    formatted = re.sub(r"(?im)^\s*reponse\s*\d+\s*[:\-]\s*", "Réponse: ", formatted)
+
+    # Keep clean spacing and ensure visual separation between blocks.
     formatted = re.sub(r"\n{3,}", "\n\n", formatted).strip()
 
     return formatted

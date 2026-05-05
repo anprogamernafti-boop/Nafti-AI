@@ -1126,7 +1126,7 @@ def build_answer_style_instruction(prompt_text, lang_code):
     if is_exercise_or_homework_request(prompt_text):
         base_instruction += (
             " Format OBLIGATOIRE pour exercice/devoir: réponds question par question de façon claire. "
-            "Après la réponse de chaque question, passe simplement à la ligne avant la question suivante. "
+            "Après la réponse de chaque question, fais un retour à la ligne avant la question suivante. "
             "Garde la numérotation des questions telle qu'elle apparaît dans l'exercice (1, 2, 3...). "
             "Ne change pas l'ordre des questions."
         )
@@ -1215,6 +1215,7 @@ def format_exercise_answer(text):
     # If explicit question markers appear inline, push them to a new paragraph.
     formatted = re.sub(r"\s+(Question\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
     formatted = re.sub(r"\s+(Q\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
+    formatted = re.sub(r"(?<!\n)\s+(\d+\s*[\)\.\-:])(?=\s*[A-Za-zÀ-ÿ])", r"\n\n\1", formatted)
 
     # Normalize some markers while keeping original numbering visible.
     formatted = re.sub(r"(?im)^\s*q\s*(\d+)\s*[:\-]\s*", r"Question \1: ", formatted)

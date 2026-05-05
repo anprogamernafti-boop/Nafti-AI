@@ -1110,7 +1110,8 @@ def build_answer_style_instruction(prompt_text, lang_code):
             " Format OBLIGATOIRE pour exercice/devoir: réponds question par question de façon claire. "
             "Après la réponse de chaque question, passe simplement à la ligne avant la question suivante. "
             "Garde la numérotation des questions telle qu'elle apparaît dans l'exercice (1, 2, 3...). "
-            "Ne change pas l'ordre des questions."
+            "Ne change pas l'ordre des questions. "
+            "N'ajoute jamais de numérotation de ligne ou de liste inutile dans le corps de la réponse."
         )
 
     return base_instruction
@@ -1191,10 +1192,9 @@ def format_exercise_answer(text):
     # Normalize line breaks.
     formatted = formatted.replace("\r\n", "\n").replace("\r", "\n")
 
-    # If question markers appear inline, push each question marker to a new paragraph.
+    # If explicit question markers appear inline, push them to a new paragraph.
     formatted = re.sub(r"\s+(Question\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
     formatted = re.sub(r"\s+(Q\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
-    formatted = re.sub(r"\s+(\d+\s*[\)\.\-:])\s+", r"\n\n\1 ", formatted)
 
     # Normalize some markers while keeping original numbering visible.
     formatted = re.sub(r"(?im)^\s*q\s*(\d+)\s*[:\-]\s*", r"Question \1: ", formatted)

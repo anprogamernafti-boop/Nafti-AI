@@ -12,7 +12,7 @@ import time
 import re
 from PIL import Image
 from io import BytesIO
-from langdetect import detect, LangDetectException, DetectorFactory
+from langdetect import detect_langs, DetectorFactory
 DetectorFactory.seed = 0   # Résultats reproductibles
 try:
     from textblob import TextBlob
@@ -195,70 +195,135 @@ def verify_password(password, password_hash):
 
 def detect_language_ensemble(text):
     """
-    ✅ DÉTECTION SIMPLE & FIABLE - Sans complications
-    
+    Détection de langue robuste pour verrouiller la langue de réponse.
+
     Priorité:
-      1. Scripts Unicode (100% fiable) → retour immédiat
-      2. langdetect (NLP robuste pour texte latin) → meilleure confiance
-      3. Fallback en anglais (langue neutre)
+      1. Scripts Unicode (100% fiable) -> retour immédiat
+      2. Diacritiques hautement distinctifs (ex: ñ, ã, ß, ğ)
+      3. langdetect avec probabilité
+      4. Heuristiques n-grammes/mots-clés pour textes courts ambigus
+      5. Fallback français (langue par défaut de l'app)
     """
     if not text or not text.strip():
-        return {"language": "en", "confidence": 0.0, "method": "empty_text"}
-    
+        return {"language": "fr", "confidence": 0.0, "method": "empty_text"}
+
     stripped_text = text.strip()
-    
+    lower_text = stripped_text.lower()
+    word_count = len(re.findall(r"\b[\w'-]+\b", stripped_text, flags=re.UNICODE))
+
     # ─── 1. UNICODE SCRIPTS (100% fiable) ────────────────────────────────
     # Arabe
     if re.search(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u08E0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]", stripped_text):
         return {"language": "ar", "confidence": 1.0, "method": "unicode_arabic"}
-    
+
     # Cyrillique
     if re.search(r"[\u0400-\u04FF]", stripped_text):
         return {"language": "ru", "confidence": 1.0, "method": "unicode_cyrillic"}
-    
+
     # Japonais
     if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", stripped_text):
         return {"language": "ja", "confidence": 1.0, "method": "unicode_japanese"}
-    
+
     # Chinois
     if re.search(r"[\u4E00-\u9FFF]", stripped_text):
         return {"language": "zh", "confidence": 1.0, "method": "unicode_chinese"}
-    
+
     # Coréen
     if re.search(r"[\uAC00-\uD7AF]", stripped_text):
         return {"language": "ko", "confidence": 1.0, "method": "unicode_korean"}
-    
+
     # Grec
     if re.search(r"[\u0370-\u03FF]", stripped_text):
         return {"language": "el", "confidence": 1.0, "method": "unicode_greek"}
-    
+
     # Hébreu
     if re.search(r"[\u0590-\u05FF]", stripped_text):
         return {"language": "he", "confidence": 1.0, "method": "unicode_hebrew"}
-    
+
     # Hindi
     if re.search(r"[\u0900-\u097F]", stripped_text):
         return {"language": "hi", "confidence": 1.0, "method": "unicode_hindi"}
-    
+
     # Thai
     if re.search(r"[\u0E00-\u0E7F]", stripped_text):
         return {"language": "th", "confidence": 1.0, "method": "unicode_thai"}
-    
-    # ─── 2. LANGDETECT (Pour texte latin: EN, FR, ES, DE, PT, etc.) ──────
-    try:
-        detected = detect(stripped_text)
-        base_lang = detected.split('-')[0] if '-' in detected else detected
-        return {"language": base_lang, "confidence": 0.85, "method": "langdetect"}
-    except:
-        pass
-    
-    # ─── 3. FALLBACK: Anglais (langue neutre, pas français) ───────────────
-    return {"language": "en", "confidence": 0.3, "method": "fallback_english"}
 
-def detect_language(text):
-    """Simple wrapper - utilise l'ensemble pour les meilleurs résultats"""
-    result = detect_language_ensemble(text)
-    return result["language"]
+    # ─── 2. DIACRITIQUES DISTINCTIFS (très fiables) ───────────────────────
+    if re.search(r"[ñ¿¡]", stripped_text):
+        return {"language": "es", "confidence": 0.98, "method": "diacritic_spanish"}
+    if re.search(r"[ãõ]", stripped_text):
+        return {"language": "pt", "confidence": 0.98, "method": "diacritic_portuguese"}
+    if re.search(r"[äöüß]", stripped_text):
+        return {"language": "de", "confidence": 0.98, "method": "diacritic_german"}
+    if re.search(r"[ğışĞŞİı]", stripped_text):
+        return {"language": "tr", "confidence": 0.98, "method": "diacritic_turkish"}
+
+    # ─── 3. LANGDETECT (probabilité) ──────────────────────────────────────
+    supported = {
+        "fr", "en", "es", "de", "it", "pt", "ru", "ar", "zh", "ja", "ko",
+        "nl", "tr", "pl", "sv", "da", "fi", "cs", "hu", "ro", "el", "he",
+        "hi", "th", "vi", "id", "ms", "uk", "ca", "gl", "no"
+    }
+    alias = {"iw": "he", "nb": "no", "nn": "no"}
+    top_lang = None
+    top_prob = 0.0
+
+    try:
+        candidates = detect_langs(stripped_text)
+        if candidates:
+            detected = candidates[0].lang.lower()
+            detected = "zh" if detected.startswith("zh") else detected.split("-")[0]
+            detected = alias.get(detected, detected)
+            if detected in supported:
+                top_lang = detected
+                top_prob = float(candidates[0].prob)
+    except Exception:
+        pass
+
+    # ─── 4. HEURISTIQUES (utile pour prompts très courts ambigus) ──────────
+    if word_count <= 6 or top_prob < 0.85:
+        heuristic_scores = {
+            "fr": _score_french_ngrams(stripped_text, lower_text),
+            "en": _score_english_ngrams(stripped_text, lower_text),
+            "es": _score_spanish_ngrams(stripped_text, lower_text),
+            "pt": 0,
+            "it": 0,
+            "de": 0,
+            "nl": 0,
+        }
+
+        if re.search(r"\b(ola|obrigado|obrigada|voce|nao|tudo|tambem|estou)\b", lower_text):
+            heuristic_scores["pt"] += 4
+        if re.search(r"\b(ciao|grazie|prego|perche|sono|voglio|come stai)\b", lower_text):
+            heuristic_scores["it"] += 4
+        if re.search(r"\b(hallo|danke|bitte|ich|nicht|guten)\b", lower_text):
+            heuristic_scores["de"] += 4
+        if re.search(r"\b(ik|jij|wij|hallo|dank|goed)\b", lower_text):
+            heuristic_scores["nl"] += 4
+
+        ranked = sorted(heuristic_scores.items(), key=lambda x: x[1], reverse=True)
+        best_lang, best_score = ranked[0]
+        second_score = ranked[1][1] if len(ranked) > 1 else 0
+
+        if best_score >= 3 and best_score >= (second_score + 2):
+            heuristic_confidence = min(0.88, round(0.55 + best_score * 0.05, 2))
+            return {
+                "language": best_lang,
+                "confidence": heuristic_confidence,
+                "method": "heuristic_ngrams"
+            }
+
+    # ─── 5. Sortie langdetect si dispo ─────────────────────────────────────
+    if top_lang:
+        method = "langdetect_high_conf" if top_prob >= 0.85 else "langdetect_low_conf"
+        return {
+            "language": top_lang,
+            "confidence": round(top_prob, 3),
+            "method": method
+        }
+
+    # ─── 6. FALLBACK ────────────────────────────────────────────────────────
+    return {"language": "fr", "confidence": 0.3, "method": "fallback_french"}
 
 def _score_french_ngrams(text, lower_text):
     """Scorer français basé sur n-grams caractéristiques"""
@@ -539,199 +604,6 @@ def detect_language(text):
     """Wrapper intelligent - utilise l'ensemble pour de meilleurs résultats"""
     result = detect_language_ensemble(text)
     return result["language"]
-    """Détection de langue automatique — aucune sélection manuelle requise.
-
-    Ordre de priorité :
-      1. Scripts non-latins  → détection instantanée et sûre à 100 %
-      2. Accents 100 % non-ambigus (ñ, ã, ä, ß…) → une seule langue possible
-      3. langdetect (NLP) dès 1 mot → démêle FR/PT/IT/EN avec précision ~95 %
-      4. Accents ambigus pour 1 seul mot court sans langdetect
-      5. Mots-clés pondérés  → filet de sécurité pour textes ultra-courts
-      6. Fallback fr         → langue par défaut de l'app
-    """
-    if not text or not text.strip():
-        return "fr"
-
-    stripped_text = text.strip()
-
-    # ── 1. Scripts non-latins ────────────────────────────────────────────────
-    if re.search(r"[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]", stripped_text):
-        return "ar"   # Arabe (tous blocs Unicode)
-    if re.search(r"[\u0400-\u04FF]", stripped_text):
-        return "ru"   # Cyrillique (russe, ukrainien…)
-    # Japonais AVANT chinois : hiragana/katakana sont uniquement japonais
-    if re.search(r"[\u3040-\u309F\u30A0-\u30FF]", stripped_text):
-        return "ja"   # Japonais (hiragana + katakana)
-    if re.search(r"[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]", stripped_text):
-        return "zh"   # Chinois (simplifié / traditionnel / CJK compat.)
-    if re.search(r"[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]", stripped_text):
-        return "ko"   # Coréen (Hangul)
-    if re.search(r"[\u0370-\u03FF\u1F00-\u1FFF]", stripped_text):
-        return "el"   # Grec (+ grec étendu)
-    if re.search(r"[\u0590-\u05FF\uFB1D-\uFB4F]", stripped_text):
-        return "he"   # Hébreu
-    if re.search(r"[\u0900-\u097F]", stripped_text):
-        return "hi"   # Devanagari (hindi, marathi…)
-    if re.search(r"[\u0E00-\u0E7F]", stripped_text):
-        return "th"   # Thaï
-    # Turc : caractères spécifiques (sans re.I → évite les faux positifs avec 'i' latin)
-    if re.search(r"[ğışĞŞ\u0130\u0131]", stripped_text):
-        return "tr"
-
-    # ── 2. Accents 100 % non-ambigus ────────────────────────────────────────
-    # Espagnol : ñ, ¿, ¡ → absents de toutes les autres langues latines
-    if re.search(r"[ñ¿¡]", stripped_text):
-        return "es"
-    # Portugais : ã, õ → exclusifs au portugais (ã ≠ ā latin)
-    if re.search(r"[ãõ]", stripped_text):
-        return "pt"
-    # Allemand : ä, ö, ü, ß → exclusifs à l'allemand
-    if re.search(r"[äöüß]", stripped_text):
-        return "de"
-    # Polonais : ł, ź, ż, ą, ę, ć, ń, ś, ó (combinaison unique)
-    if re.search(r"[łźżąęćńś]", stripped_text):
-        return "pl"
-    # Roumain : ș, ț (virgule sous lettre), ă, â diacritiques exclusifs au roumain
-    if re.search(r"[șțȘȚăĂ]", stripped_text):
-        return "ro"
-    # Tchèque / Slovaque : ů, ě, č, š, ř, ž, ď, ť, ň
-    if re.search(r"[ůěřďť]", stripped_text):
-        return "cs"
-    # Scandinave : å → danois/norvégien/suédois
-    if re.search(r"[åÅ]", stripped_text):
-        return "sv"   # par défaut suédois (le plus utilisé)
-
-    # ── 3. langdetect (NLP) — dès 1 mot pour démêler FR/PT/IT/EN ────────────
-    try:
-        words = stripped_text.split()
-        if len(words) >= 1:  # Activé dès le premier mot
-            detected = detect(stripped_text)
-            supported = {
-                'fr', 'en', 'es', 'de', 'it', 'pt', 'ru', 'ar',
-                'zh-cn', 'zh-tw', 'ja', 'ko', 'nl', 'tr', 'pl',
-                'sv', 'da', 'fi', 'cs', 'hu', 'ro', 'el', 'he',
-                'hi', 'th', 'vi', 'id', 'ms', 'uk', 'ca', 'gl'
-            }
-            if detected in supported:
-                return "zh" if detected.startswith("zh") else detected
-            # Gestion des variantes de codes (ex: zh-cn → zh)
-            base = detected.split('-')[0]
-            if base in supported:
-                return base
-    except Exception:
-        pass
-
-    # ── 4. Accents ambigus pour textes courts (sans résultat langdetect fiable) ─
-    # Français exclusif : œ, æ, â, ê, î, ô, û, ë, ï, ù, ÿ
-    if re.search(r"[àâçèêëîïôùûüÿœæ]", stripped_text, flags=re.IGNORECASE):
-        return "fr"
-    # Accent aigu ambigu (á, é, í, ó, ú) : présent en ES, PT, IT
-    # → résolution par mots-clés avant de tomber sur un défaut
-    if re.search(r"[áéíóú]", stripped_text, flags=re.IGNORECASE):
-        lower_accented = stripped_text.lower()
-        # Portugais : mots très distinctifs (tudo, você, não, obrigado…)
-        pt_signals = re.findall(
-            r"\b(tudo|voce|nao|obrigado|obrigada|ola|pois|embora|tenho|temos"
-            r"|tambem|isso|aqui|entao|muito|agora|estou|estao|posso|podes)\b",
-            lower_accented)
-        # Espagnol : mots très distinctifs (hola, hay, también, vosotros…)
-        es_signals = re.findall(
-            r"\b(hola|hay|vosotros|ellos|ellas|del|bueno|claro|vale|pues"
-            r"|tiene|tienes|tienen|quiero|quieres|puedo|puedes|pueden|estoy|estas|estan)\b",
-            lower_accented)
-        # Italien : mots distinctifs (ciao, sono, avere, essere…)
-        it_signals = re.findall(
-            r"\b(ciao|sono|avere|essere|grazie|scusa|prego|bene|tutto|molto"
-            r"|ho|hai|ha|abbiamo|voglio|vuoi|siamo|cosa|chi|dove)\b",
-            lower_accented)
-        if len(pt_signals) >= len(es_signals) and len(pt_signals) >= len(it_signals) and pt_signals:
-            return "pt"
-        if len(it_signals) > len(es_signals) and len(it_signals) > len(pt_signals):
-            return "it"
-        return "es"  # défaut pour les accents aigus sans contexte
-    # Italien : ì exclusif (più, così…)
-    if re.search(r"[ìÌ]", stripped_text, flags=re.IGNORECASE):
-        return "it"
-
-    # ── 5. Mots-clés pondérés (textes très courts ≤ 1 mot, sans accents) ────
-    lower_text = stripped_text.lower()
-
-    kw = {
-        # Français : mots grammaticaux + salutations très fréquents
-        "fr": r"\b(je|tu|il|elle|nous|vous|ils|elles|un|une|des|les|le|la|est|sont"
-              r"|avec|pour|dans|sur|par|mais|donc|car|or|ni|si|que|qui|quoi"
-              r"|salut|bonjour|bonsoir|coucou|merci|oui|non|svp|ici|tres|bien|aussi|alors"
-              r"|comment|pourquoi|quand|faire|avoir|aller|vouloir|pouvoir|devoir|venir|voir"
-              r"|sans|vers|sous|entre|depuis|avant|apres|toujours|jamais|encore|deja"
-              r"|mon|ma|mes|ton|ta|tes|son|sa|ses|notre|votre|leur|leurs)\b",
-
-        # Anglais : mots fréquents, évite les collisions avec FR (a, an, or, for…)
-        "en": r"\b(i|you|he|she|we|they|the|is|are|was|were|be|been|being"
-              r"|have|has|had|do|does|did|will|would|could|should|may|might|shall"
-              r"|and|but|not|this|that|these|those|with|from|into|about|just|also"
-              r"|hi|hello|hey|thanks|thank|yes|no|please|sorry|okay|ok|sure|right"
-              r"|what|who|where|when|why|how|can|my|your|his|her|our|their|its"
-              r"|get|got|go|come|know|think|make|take|want|need|see|look|use|find)\b",
-
-        # Espagnol : mots exclusifs (évite les collisions avec PT)
-        "es": r"\b(yo|nosotros|vosotros|ellos|ellas|los|las|del|al"
-              r"|con|para|por|pero|aunque|mientras|porque|entonces"
-              r"|hola|adios|gracias|por favor|perdon|bueno|claro|vale|pues"
-              r"|hacer|ir|venir|tener|estar|ser|poder|querer|deber|saber|ver|dar)\b",
-
-        # Allemand : mots grammaticaux typiques + salutations sans accents
-        "de": r"\b(ich|du|er|wir|ihr|der|die|das|ein|eine|und|ist|sind|war|waren"
-              r"|mit|fur|auf|an|von|zu|bei|nach|uber|unter|vor|hinter|neben"
-              r"|hallo|danke|ja|nein|bitte|wie|was|wo|wer|warum|wann|schon|noch"
-              r"|morgen|abend|guten|gut|tag|nacht|tschuss|entschuldigung"
-              r"|machen|gehen|kommen|haben|sein|werden|konnen|mussen|wollen|sagen)\b",
-
-        # Portugais : mots exclusifs vs espagnol (nós, eles, não, mas, porque…)
-        "pt": r"\b(eu|nos|eles|elas|um|uma|os|as|do|da|dos|das|num|numa"
-              r"|com|para|em|por|mas|se|como|quando|porque|pois|embora"
-              r"|ola|obrigado|obrigada|sim|nao|por favor|desculpe|tudo|bem|voce"
-              r"|fazer|ir|vir|ter|estar|ser|poder|querer|dever|saber|ver|dar"
-              r"|tenho|tens|tem|temos|quero|queres|posso|podes|estou|estao|isso|tambem)\b",
-
-        # Italien : mots exclusifs
-        "it": r"\b(io|lui|lei|noi|loro|il|gli|uno|una|del|della|degli|delle"
-              r"|con|per|su|di|che|ma|se|come|quando|perche|quindi|pero|anche"
-              r"|ciao|grazie|scusa|prego|si|no|per favore|bene|tutto|molto"
-              r"|fare|andare|venire|avere|essere|potere|volere|dovere|sapere|vedere|dare)\b",
-
-        # Néerlandais : mots typiques
-        "nl": r"\b(ik|jij|jij|hij|zij|wij|jullie|de|het|een|zijn|was|waren"
-              r"|met|voor|op|aan|van|naar|bij|over|door|onder|maar|ook|nog|al"
-              r"|hallo|dag|dank|ja|nee|alsjeblieft|sorry|goed|hoe|wat|wie|waar|waarom"
-              r"|maken|gaan|komen|hebben|zijn|worden|kunnen|moeten|willen|zeggen)\b",
-
-        # Arabe romanisé (translittéré) → très courant dans le Maghreb
-        "ar": r"\b(marhaba|ahlan|salamalaikum|shukran|afwan|inshallah|habibi|yalla"
-              r"|kifak|kifek|wesh|labas|bghit|nta|nti|hna|ntuma|ana|hwa|hya"
-              r"|choukran|mersi|saha|baraka|mabrook|ach|wach|fain|mnin|bikhir)\b",
-    }
-
-    scores = {}
-    for lang, pattern in kw.items():
-        matches = re.findall(pattern, lower_text, flags=re.IGNORECASE)
-        scores[lang] = len(matches)
-
-    if scores:
-        best_lang = max(scores, key=scores.get)
-        # Seuil minimal de 1 correspondance + avantage FR en cas d'ex-aequo
-        if scores[best_lang] >= 1:
-            # En cas d'égalité, préférer le français (langue par défaut de l'app)
-            top_score = scores[best_lang]
-            candidates = [l for l, s in scores.items() if s == top_score]
-            if len(candidates) == 1:
-                return best_lang
-            elif "fr" in candidates:
-                return "fr"
-            else:
-                return candidates[0]
-
-    # ── 6. Fallback ──────────────────────────────────────────────────────────
-    return "fr"  # Langue par défaut de l'app
 
 
 def detect_tunisian_dialect(text):
@@ -1758,7 +1630,7 @@ def proxy_ai():
     api_messages = list(messages)
     
     # Detect language from the last user message
-    detected_lang = "en"  # default
+    detected_lang = "fr"  # default
     prompt_text = None
     for msg in reversed(api_messages):
         if msg.get('role') == 'user':

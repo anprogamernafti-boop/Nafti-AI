@@ -1211,11 +1211,14 @@ def format_exercise_answer(text):
 
     # Normalize line breaks.
     formatted = formatted.replace("\r\n", "\n").replace("\r", "\n")
+    formatted = re.sub(r"[ \t]*####[ \t]*", "\n\n", formatted)
 
     # If explicit question markers appear inline, push them to a new paragraph.
     formatted = re.sub(r"\s+(Question\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
     formatted = re.sub(r"\s+(Q\s*\d+\s*[:\-])", r"\n\n\1", formatted, flags=re.IGNORECASE)
     formatted = re.sub(r"(?<!\n)\s+(\d+\s*[\)\.\-:])(?=\s*[A-Za-zÀ-ÿ])", r"\n\n\1", formatted)
+    formatted = re.sub(r"(?<!\n)\s+([a-zA-Z]\s*[-:)])(?=\s*[A-Za-zÀ-ÿ0-9])", r"\n\1", formatted)
+    formatted = re.sub(r"(?im)^\s*([a-zA-Z])\s*[-:)]\s*", r"\1- ", formatted)
 
     # Normalize some markers while keeping original numbering visible.
     formatted = re.sub(r"(?im)^\s*q\s*(\d+)\s*[:\-]\s*", r"Question \1: ", formatted)

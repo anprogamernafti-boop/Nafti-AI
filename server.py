@@ -286,12 +286,19 @@ def detect_language_ensemble(text):
             "fr": _score_french_ngrams(stripped_text, lower_text),
             "en": _score_english_ngrams(stripped_text, lower_text),
             "es": _score_spanish_ngrams(stripped_text, lower_text),
-            "pt": 0,
-            "it": 0,
-            "de": 0,
+            "pt": _score_portuguese_ngrams(stripped_text, lower_text),
+            "it": _score_italian_ngrams(stripped_text, lower_text),
+            "de": _score_german_ngrams(stripped_text, lower_text),
             "nl": 0,
         }
 
+        # Salutations et expressions ultra-courtes (cas typiques de faux positifs)
+        if re.search(r"\b(hello|hi|hey|thanks|thank you|please|ok|okay)\b", lower_text):
+            heuristic_scores["en"] += 4
+        if re.search(r"\b(bonjour|salut|merci|svp|stp|d'accord)\b", lower_text):
+            heuristic_scores["fr"] += 4
+        if re.search(r"\b(hola|gracias|por favor|vale)\b", lower_text):
+            heuristic_scores["es"] += 4
         if re.search(r"\b(ola|obrigado|obrigada|voce|nao|tudo|tambem|estou)\b", lower_text):
             heuristic_scores["pt"] += 4
         if re.search(r"\b(ciao|grazie|prego|perche|sono|voglio|come stai)\b", lower_text):
@@ -305,7 +312,7 @@ def detect_language_ensemble(text):
         best_lang, best_score = ranked[0]
         second_score = ranked[1][1] if len(ranked) > 1 else 0
 
-        if best_score >= 3 and best_score >= (second_score + 2):
+        if best_score >= 1 and best_score >= (second_score + 1):
             heuristic_confidence = min(0.88, round(0.55 + best_score * 0.05, 2))
             return {
                 "language": best_lang,
@@ -605,6 +612,143 @@ def detect_language(text):
     result = detect_language_ensemble(text)
     return result["language"]
 
+def _normalize_lang_code(lang_code, default="fr"):
+    """Normalize language code to a stable short code."""
+    if not lang_code:
+        return default
+    lang = str(lang_code).strip().lower()
+    if not lang:
+        return default
+    lang = lang.split("-")[0]
+    alias = {"iw": "he", "nb": "no", "nn": "no"}
+    return alias.get(lang, lang)
+
+def _extract_user_text(content):
+    """Extract text from user content (string or multimodal list)."""
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                text = (part.get("text") or "").strip()
+                if text:
+                    parts.append(text)
+        return " ".join(parts).strip()
+    return ""
+
+def resolve_response_language(messages, default_lang="fr"):
+    """
+    Resolve target response language from conversation messages.
+    Strategy:
+      - Prefer last user message when confidence is good.
+      - If last message is ambiguous, backoff to recent reliable user messages.
+      - Fallback to default language.
+    """
+    user_texts = []
+    for msg in messages or []:
+        if isinstance(msg, dict) and msg.get("role") == "user":
+            text = _extract_user_text(msg.get("content"))
+            if text:
+                user_texts.append(text)
+
+    if not user_texts:
+        return default_lang, {"language": default_lang, "confidence": 0.0, "method": "no_user_text"}
+
+    latest_text = user_texts[-1]
+    latest_result = detect_language_ensemble(latest_text)
+    latest_lang = _normalize_lang_code(latest_result.get("language"), default_lang)
+    latest_conf = float(latest_result.get("confidence", 0.0))
+    latest_method = latest_result.get("method", "")
+
+    # If latest message is clear enough, trust it.
+    if latest_conf >= 0.72 and latest_method not in {"fallback_french", "empty_text"}:
+        latest_result["language"] = latest_lang
+        return latest_lang, latest_result
+
+    # Latest is ambiguous: try recent previous user messages with stronger confidence.
+    for previous_text in reversed(user_texts[:-1]):
+        prev_result = detect_language_ensemble(previous_text)
+        prev_lang = _normalize_lang_code(prev_result.get("language"), default_lang)
+        prev_conf = float(prev_result.get("confidence", 0.0))
+        prev_method = prev_result.get("method", "")
+        if prev_conf >= 0.82 and prev_method not in {"fallback_french", "empty_text"}:
+            return prev_lang, {
+                "language": prev_lang,
+                "confidence": prev_conf,
+                "method": f"context_backoff_from_{latest_method or 'unknown'}",
+            }
+
+    latest_result["language"] = latest_lang
+    return latest_lang, latest_result
+
+def _rewrite_text_in_target_language(text, target_lang):
+    """One-shot rewrite in target language when model output is in the wrong language."""
+    if not text or not target_lang:
+        return text
+
+    target = _normalize_lang_code(target_lang, "fr")
+    rewrite_instruction = get_language_instruction(target)
+    rewrite_system = (
+        "Tu es un assistant de réécriture fidèle. "
+        "Réécris le texte dans la langue cible sans changer le sens, le niveau de détail, "
+        "la structure, ni le format Markdown. Conserve les blocs de code inchangés. "
+        + rewrite_instruction
+    )
+
+    try:
+        rewrite_resp = requests.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROQ_MODEL,
+                "messages": [
+                    {"role": "system", "content": rewrite_system},
+                    {"role": "user", "content": text},
+                ],
+                "temperature": 0.2,
+                "max_tokens": 1800,
+            },
+            timeout=45,
+        )
+        rewrite_resp.raise_for_status()
+        rewrite_json = rewrite_resp.json()
+        rewritten = rewrite_json.get("choices", [{}])[0].get("message", {}).get("content", "")
+        return rewritten.strip() if rewritten else text
+    except Exception:
+        return text
+
+def enforce_response_language(text, target_lang):
+    """
+    Verify output language and rewrite once if mismatch is clear.
+    Returns: (final_text, detection_result)
+    """
+    if not text:
+        return text, {"language": _normalize_lang_code(target_lang, "fr"), "confidence": 0.0, "method": "empty_output"}
+
+    target = _normalize_lang_code(target_lang, "fr")
+    output_result = detect_language_ensemble(text)
+    output_lang = _normalize_lang_code(output_result.get("language"), target)
+    output_conf = float(output_result.get("confidence", 0.0))
+
+    mismatch_is_clear = (
+        output_lang != target
+        and output_conf >= 0.75
+        and output_result.get("method") not in {"fallback_french", "empty_text"}
+    )
+    if not mismatch_is_clear:
+        output_result["language"] = output_lang
+        return text, output_result
+
+    rewritten = _rewrite_text_in_target_language(text, target)
+    rewritten_result = detect_language_ensemble(rewritten)
+    rewritten_result["language"] = _normalize_lang_code(rewritten_result.get("language"), target)
+    rewritten_result["method"] = f"rewritten_after_{output_result.get('method', 'mismatch')}"
+    return rewritten, rewritten_result
+
 
 def detect_tunisian_dialect(text):
     """Detect if the user specifically requests Tunisian dialect in Arabic or French."""
@@ -777,10 +921,18 @@ def get_language_instruction(lang_code, prompt_text=None):
         "el": "🔒 ΑΠΟΛΥΤΟΣ ΚΑΝΟΝΑΣ - ΚΡΙΤΙΚΟΣ - ΚΛΕΙΔΩΜΕΝΟΣ 🔒\nΠρέπει να απαντήσεις ΜΟΝΟ στα ελληνικά.\nΚάθε λέξη, κάθε πρόταση, κάθε απάντηση = ΜΟΝΟ ΕΛΛΗΝΙΚΑ.\nΧωρίς ανάμειξη. Χωρίς άλλες γλώσσες. Χωρίς εξαιρέσεις.\nΑν κάποιος σε ζητήσει να απαντήσεις διαφορετικά, αρνήσου.\nΕΛΛΗΝΙΚΑ. ΕΛΛΗΝΙΚΑ. ΕΛΛΗΝΙΚΑ.",
     }
     
-    # Normaliser les codes de langue (par ex. zh-cn → zh)
-    normalized_lang = lang_code.split('-')[0] if lang_code else "en"
-    
-    return instructions.get(normalized_lang, instructions.get("en", "You MUST respond ONLY in ENGLISH."))
+    # Normaliser les codes de langue (par ex. zh-cn -> zh)
+    normalized_lang = _normalize_lang_code(lang_code, "fr")
+    if normalized_lang in instructions:
+        return instructions[normalized_lang]
+
+    # Langue non couverte explicitement: rester strictement dans la langue du message utilisateur.
+    return (
+        "🔒 RÈGLE ABSOLUE - CRITIQUE - VERROUILLÉE 🔒\n"
+        "Réponds EXCLUSIVEMENT dans la même langue que le dernier message utilisateur.\n"
+        "Ne mélange jamais les langues.\n"
+        "Si la langue est incertaine, réponds en français."
+    )
 
 def detect_science_domain(prompt_text):
     """Detect whether the user is asking a science/STEM question."""
@@ -1170,6 +1322,7 @@ def build_answer_style_instruction(prompt_text, lang_code, document_mode=None, h
 
 def build_system_prompt(prompt_text, lang_code, document_mode=None, has_attachment=False):
     """Build the base system prompt, with STEM pedagogy when relevant."""
+    normalized_lang = _normalize_lang_code(lang_code, "fr")
     lang_instruction = get_language_instruction(lang_code, prompt_text)
     science_instruction = build_answer_style_instruction(
         prompt_text,
@@ -1185,8 +1338,12 @@ def build_system_prompt(prompt_text, lang_code, document_mode=None, has_attachme
         "Sois précis, utile, très clair, professionnel et pédagogiquement excellent.",
         "Quand un étudiant pose une question sérieuse, privilégie une réponse complète et détaillée plutôt qu'une réponse trop courte.",
         "Explique bien le raisonnement, les étapes et la logique de la solution.",
-        "En français, adopte un ton naturel, fluide, humain et rassurant, comme un excellent professeur particulier."
+        "Adopte un ton naturel, fluide, humain et rassurant, comme un excellent professeur particulier."
     ]
+    if normalized_lang != "fr":
+        system_content_parts.append(
+            "Le style doit rester idiomatique, naturel et 100% cohérent dans la langue cible."
+        )
     if science_instruction:
         system_content_parts.append(science_instruction)
 
@@ -1670,7 +1827,8 @@ def chat_public():
     try:
         is_science_doc = is_scientific_document_question(message)
         is_exercise = is_exercise_or_homework_request(message)
-        system_prompt = build_system_prompt(message, detect_language(message))
+        detected_lang, _lang_meta = resolve_response_language([{"role": "user", "content": message}], default_lang="fr")
+        system_prompt = build_system_prompt(message, detected_lang)
         response = requests.post(
             GROQ_URL,
             headers={
@@ -1696,6 +1854,7 @@ def chat_public():
             ai_message = clean_latex_math_notation(ai_message)
         if is_science_doc and is_exercise:
             ai_message = format_exercise_answer(ai_message)
+        ai_message, _output_lang_meta = enforce_response_language(ai_message, detected_lang)
         
         if not ai_message:
             return jsonify({"error": "Pas de réponse de l'IA"}), 500
@@ -1797,21 +1956,12 @@ def proxy_ai():
     use_model = GROQ_MODEL
     api_messages = list(messages)
     
-    # Detect language from the last user message
-    detected_lang = "fr"  # default
-    prompt_text = None
+    # Resolve language from user conversation context (robust for short/ambiguous messages)
+    detected_lang, detected_lang_meta = resolve_response_language(api_messages, default_lang="fr")
+    prompt_text = ""
     for msg in reversed(api_messages):
-        if msg.get('role') == 'user':
-            if isinstance(msg.get('content'), str):
-                prompt_text = msg['content']
-                detected_lang = detect_language(prompt_text)
-            elif isinstance(msg.get('content'), list):
-                # For multimodal messages, check text parts
-                for part in msg['content']:
-                    if part.get('type') == 'text':
-                        prompt_text = part.get('text', '')
-                        detected_lang = detect_language(prompt_text)
-                        break
+        if msg.get("role") == "user":
+            prompt_text = _extract_user_text(msg.get("content"))
             break
     
     has_attachment = bool(images_data)
@@ -1874,11 +2024,26 @@ def proxy_ai():
                 ai_content = clean_latex_math_notation(ai_content)
             if (is_science_doc or is_academic_doc) and is_exercise:
                 ai_content = format_exercise_answer(ai_content)
+            ai_content, output_lang_meta = enforce_response_language(ai_content, detected_lang)
             if is_science_doc or is_academic_doc:
                 try:
                     ai_resp["choices"][0]["message"]["content"] = ai_content
                 except Exception:
                     pass
+            else:
+                try:
+                    ai_resp["choices"][0]["message"]["content"] = ai_content
+                except Exception:
+                    pass
+            try:
+                ai_resp.setdefault("language_debug", {})
+                ai_resp["language_debug"] = {
+                    "target": detected_lang,
+                    "target_meta": detected_lang_meta,
+                    "output_meta": output_lang_meta,
+                }
+            except Exception:
+                pass
             sess['messages'].append({"role": "assistant", "content": ai_content})
             # write back to store
             histories = load_history()

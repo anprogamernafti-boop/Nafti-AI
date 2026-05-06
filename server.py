@@ -825,8 +825,21 @@ def detect_science_domain(prompt_text):
 
     return max(scores, key=scores.get)
 
-def is_scientific_document_question(prompt_text):
+def is_scientific_document_question(prompt_text, has_attachment=False):
     """Return True when the user likely asks about a scientific document or school material."""
+    if has_attachment and prompt_text:
+        short_request = prompt_text.lower().strip()
+        generic_attachment_requests = {
+            "reponds", "réponds", "reponds aux questions", "réponds aux questions",
+            "reponds aux question", "réponds aux question", "repond", "répond",
+            "corrige", "corrigé", "analyse", "explique"
+        }
+        if short_request in generic_attachment_requests:
+            return True
+
+    if has_attachment and not prompt_text:
+        return True
+
     if not prompt_text:
         return False
 
@@ -850,8 +863,17 @@ def is_scientific_document_question(prompt_text):
     ]
     return any(phrase in text for phrase in doc_intent_keywords)
 
-def is_exercise_or_homework_request(prompt_text):
+def is_exercise_or_homework_request(prompt_text, has_attachment=False):
     """Detect exercise/homework style requests that need per-question formatting."""
+    if has_attachment and prompt_text:
+        short_request = prompt_text.lower().strip()
+        generic_attachment_requests = {
+            "reponds", "réponds", "reponds aux questions", "réponds aux questions",
+            "reponds aux question", "réponds aux question", "repond", "répond",
+        }
+        if short_request in generic_attachment_requests:
+            return True
+
     if not prompt_text:
         return False
 
@@ -869,6 +891,92 @@ def is_exercise_or_homework_request(prompt_text):
         return True
 
     return False
+
+def classify_document_from_images(images_data, prompt_text="", lang_code="fr"):
+    """Classify attached images before generating the final answer.
+
+    Returns one of:
+    - scientific_document
+    - academic_document
+    - non_document
+    - unknown
+    """
+    if not images_data or not GROQ_API_KEY:
+        return "unknown"
+
+    try:
+        # Keep the classifier strict and cheap: token-only answer.
+        classifier_prompt = (
+            "Analyse cette image comme un classificateur de document scolaire. "
+            "Choisis UNE seule categorie parmi: scientific_document, academic_document, non_document. "
+            "scientific_document = maths, physique, chimie, mecanique, electricite, sciences de l'ingenieur, formules, graphiques scientifiques. "
+            "academic_document = francais, anglais, philosophie, histoire, geographie, education civique, langues, litterature, dissertation, comprehension de texte. "
+            "non_document = image qui n'est pas un devoir, exercice, cours, page scolaire ou document d'etude identifiable. "
+            "Reponds avec un seul mot exact parmi ces 3 categories, sans phrase."
+        )
+        if prompt_text:
+            classifier_prompt += f" Contexte utilisateur: {prompt_text[:300]}"
+
+        content_parts = [{"type": "text", "text": classifier_prompt}]
+        for img in images_data[:2]:
+            content_parts.append({"type": "image_url", "image_url": {"url": img}})
+
+        response = requests.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": GROQ_VISION_MODEL,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "Tu es un classificateur visuel tres strict. Reponds uniquement par une categorie exacte."
+                    },
+                    {
+                        "role": "user",
+                        "content": content_parts
+                    }
+                ],
+                "temperature": 0.0,
+                "max_tokens": 20,
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        result = response.json()
+        content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+        normalized = (content or "").strip().lower()
+
+        if "scientific_document" in normalized:
+            return "scientific_document"
+        if "academic_document" in normalized:
+            return "academic_document"
+        if "non_document" in normalized:
+            return "non_document"
+        return "unknown"
+    except Exception as e:
+        print(f"[DOC_CLASSIFIER] Classification fallback: {e}")
+        return "unknown"
+
+def select_document_mode(prompt_text, images_data, lang_code):
+    """Choose the response mode before generating the final answer."""
+    has_attachment = bool(images_data)
+
+    if has_attachment:
+        classified = classify_document_from_images(images_data, prompt_text or "", lang_code or "fr")
+        if classified == "scientific_document":
+            return "scientific_document"
+        if classified == "academic_document":
+            return "academic_document"
+        if classified == "non_document":
+            return None
+
+    if is_scientific_document_question(prompt_text, has_attachment=False):
+        return "scientific_document"
+
+    return None
 
 def build_science_instruction(domain, lang_code):
     """Return a high-quality, student-friendly instruction for STEM questions."""
@@ -966,36 +1074,91 @@ def build_science_instruction(domain, lang_code):
     lang_templates = templates.get(normalized_lang, templates["en"])
     return lang_templates.get(domain, "")
 
-def build_answer_style_instruction(prompt_text, lang_code):
-    """Build an additional instruction when the question is STEM-related."""
-    if not is_scientific_document_question(prompt_text):
-        return None
-
-    domain = detect_science_domain(prompt_text)
-    if not domain:
-        return None
-
-    domain_label = {
-        "math": "mathématiques",
-        "physics": "physique",
-        "mechanics": "mécanique",
-        "electricity": "électricité",
-    }.get(domain, domain)
-
-    science_instruction = build_science_instruction(domain, lang_code)
-    if not science_instruction:
-        return None
-
-    base_instruction = (
-        f"Contexte scientifique détecté: {domain_label}. {science_instruction} "
-        "Si la réponse demande un calcul, montre les étapes essentielles. "
-        "Si la question est théorique, donne une explication structurée, complète et pédagogique. "
-        "Donne une vraie réponse de niveau excellent, comme un corrigé académique propre et sérieux. "
-        "Ne saute aucune étape importante du raisonnement. "
-        "Le style doit rester naturel, fluide, humain et agréable à lire pour un étudiant."
+def build_academic_document_instruction(lang_code):
+    """Instruction for non-scientific school documents."""
+    normalized_lang = (lang_code or "en").split('-')[0]
+    if normalized_lang == "fr":
+        return (
+            "Tu es un excellent professeur particulier pour les matieres scolaires non scientifiques. "
+            "Ta reponse doit etre tres claire, professionnelle, detaillee, bien redigee et adaptee aux attentes d'un etudiant. "
+            "Explique les idees de facon simple, structuree et naturelle. "
+            "Quand il s'agit d'un exercice ou d'un devoir, reponds question par question, en restant coherent avec la consigne et le niveau attendu. "
+            "Pour le francais, l'anglais, l'histoire-geographie, la philosophie ou les matieres litteraires, privilegie l'analyse, l'explication, la reformulation claire et les exemples utiles."
+        )
+    return (
+        "You are an excellent private tutor for non-scientific school subjects. "
+        "Your answer must be clear, detailed, well-structured, professional, and student-friendly. "
+        "When the user shares an exercise or assignment, answer question by question and stay aligned with the expected academic level."
     )
 
-    if is_exercise_or_homework_request(prompt_text):
+def build_generic_science_document_instruction(lang_code):
+    """Fallback instruction when the domain is scientific but not confidently identified from text."""
+    normalized_lang = (lang_code or "en").split('-')[0]
+    if normalized_lang == "fr":
+        return (
+            "Tu analyses un document scientifique ou un exercice pour un etudiant. "
+            "La reponse doit etre tres claire, complete, detaillee, professionnelle et pedagogique. "
+            "Redige comme un excellent professeur particulier. "
+            "Reponds question par question, explique bien le raisonnement, justifie les etapes importantes, "
+            "et garde un francais naturel, fluide et humain. "
+            "N'utilise jamais la syntaxe LaTeX brute (pas de \\frac, \\text, $, {}, \\theta, \\times). "
+            "Utilise uniquement des symboles lisibles et des operateurs classiques."
+        )
+    return (
+        "You are analyzing a scientific document or exercise for a student. "
+        "The answer must be clear, complete, detailed, professional, and highly pedagogical. "
+        "Respond like an excellent private tutor. "
+        "Answer question by question, explain the reasoning, justify important steps, "
+        "and never use raw LaTeX syntax."
+    )
+
+def build_answer_style_instruction(prompt_text, lang_code, document_mode=None, has_attachment=False):
+    """Build an additional instruction based on the detected document mode."""
+    mode = document_mode
+    if not mode and is_scientific_document_question(prompt_text, has_attachment=has_attachment):
+        mode = "scientific_document"
+
+    if not mode:
+        return None
+
+    if mode == "scientific_document":
+        domain = detect_science_domain(prompt_text)
+        if domain:
+            domain_label = {
+                "math": "mathématiques",
+                "physics": "physique",
+                "mechanics": "mécanique",
+                "electricity": "électricité",
+            }.get(domain, domain)
+            science_instruction = build_science_instruction(domain, lang_code)
+            base_instruction = (
+                f"Contexte scientifique détecté: {domain_label}. {science_instruction} "
+                "Si la réponse demande un calcul, montre les étapes essentielles. "
+                "Si la question est théorique, donne une explication structurée, complète et pédagogique. "
+                "Donne une vraie réponse de niveau excellent, comme un corrigé académique propre et sérieux. "
+                "Ne saute aucune étape importante du raisonnement. "
+                "Le style doit rester naturel, fluide, humain et agréable à lire pour un étudiant."
+            )
+        else:
+            science_instruction = build_generic_science_document_instruction(lang_code)
+            base_instruction = (
+                f"Contexte scientifique détecté via document ou image jointe. {science_instruction} "
+                "Si la réponse demande un calcul, montre les étapes essentielles. "
+                "Si plusieurs questions apparaissent dans l'image, réponds à chacune séparément."
+            )
+        if not science_instruction:
+            return None
+    elif mode == "academic_document":
+        academic_instruction = build_academic_document_instruction(lang_code)
+        base_instruction = (
+            f"Contexte scolaire non scientifique détecté. {academic_instruction} "
+            "Donne une réponse complète, claire, cohérente et agréable à lire pour un étudiant. "
+            "Si plusieurs questions apparaissent dans le document, réponds à chacune séparément."
+        )
+    else:
+        return None
+
+    if is_exercise_or_homework_request(prompt_text, has_attachment=has_attachment):
         base_instruction += (
             " Format OBLIGATOIRE pour exercice/devoir: réponds question par question de façon claire. "
             "Après la réponse de chaque question, fais un retour à la ligne avant la question suivante. "
@@ -1005,10 +1168,15 @@ def build_answer_style_instruction(prompt_text, lang_code):
 
     return base_instruction
 
-def build_system_prompt(prompt_text, lang_code):
+def build_system_prompt(prompt_text, lang_code, document_mode=None, has_attachment=False):
     """Build the base system prompt, with STEM pedagogy when relevant."""
     lang_instruction = get_language_instruction(lang_code, prompt_text)
-    science_instruction = build_answer_style_instruction(prompt_text, lang_code)
+    science_instruction = build_answer_style_instruction(
+        prompt_text,
+        lang_code,
+        document_mode=document_mode,
+        has_attachment=has_attachment,
+    )
 
     system_content_parts = [
         "Tu es Nafti AI, un assistant intelligent, bienveillant et fiable.",
@@ -1646,10 +1814,17 @@ def proxy_ai():
                         break
             break
     
-    # Construire le message système avec instruction de langue ferme et pédagogie STEM si nécessaire
-    system_content = build_system_prompt(prompt_text, detected_lang)
-    is_science_doc = is_scientific_document_question(prompt_text)
-    is_exercise = is_exercise_or_homework_request(prompt_text)
+    has_attachment = bool(images_data)
+    document_mode = select_document_mode(prompt_text, images_data, detected_lang)
+    system_content = build_system_prompt(
+        prompt_text,
+        detected_lang,
+        document_mode=document_mode,
+        has_attachment=has_attachment,
+    )
+    is_science_doc = document_mode == "scientific_document"
+    is_academic_doc = document_mode == "academic_document"
+    is_exercise = is_exercise_or_homework_request(prompt_text, has_attachment=has_attachment)
     
     # Remplacer ou ajouter le message système
     api_messages = [msg for msg in api_messages if msg.get('role') != 'system']
@@ -1697,9 +1872,9 @@ def proxy_ai():
         if ai_content:
             if is_science_doc:
                 ai_content = clean_latex_math_notation(ai_content)
-            if is_science_doc and is_exercise:
+            if (is_science_doc or is_academic_doc) and is_exercise:
                 ai_content = format_exercise_answer(ai_content)
-            if is_science_doc:
+            if is_science_doc or is_academic_doc:
                 try:
                     ai_resp["choices"][0]["message"]["content"] = ai_content
                 except Exception:

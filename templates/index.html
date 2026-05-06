@@ -3227,14 +3227,38 @@ function detectLanguage(text) {
 function speakText(text, button) {
   if (!text || text.length === 0) return;
   
-  // Stop current audio if playing
+  // Toggle play/pause: if clicking the same button that's playing, stop it
+  if (window._currentSpeakBtn === button) {
+    // Stop audio (gTTS)
+    if (window._currentAudio) {
+      window._currentAudio.pause();
+      window._currentAudio = null;
+    }
+    // Stop Web Speech API
+    if (window._currentUtterance && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      window._currentUtterance = null;
+    }
+    window._currentSpeakBtn = null;
+    if (button) {
+      button.classList.remove('playing');
+      button.disabled = false;
+    }
+    return;
+  }
+  
+  // Stop current audio if playing a different button
   if (window._currentAudio) {
     window._currentAudio.pause();
     window._currentAudio = null;
-    if (window._currentSpeakBtn) {
-      window._currentSpeakBtn.classList.remove('playing');
-      window._currentSpeakBtn.disabled = false;
-    }
+  }
+  if (window._currentUtterance && window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+    window._currentUtterance = null;
+  }
+  if (window._currentSpeakBtn) {
+    window._currentSpeakBtn.classList.remove('playing');
+    window._currentSpeakBtn.disabled = false;
   }
   
   if (button) {
